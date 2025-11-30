@@ -1,37 +1,23 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+
+// Conditional import for platform-specific implementation
+import 'navigation_repository_io.dart'
+    if (dart.library.html) 'navigation_repository_web.dart' as impl;
 
 class NavigationRepository {
   bool checkLibraryIsEmpty() {
+    if (kIsWeb) {
+      // On web, we'll check differently (e.g., IndexedDB)
+      return impl.checkLibraryIsEmpty();
+    }
+
     final libraryPath = Settings.getValue<String>('key-library-path');
     if (libraryPath == null) {
       return true;
     }
 
-    // בדיקה שהתיקייה הראשית קיימת
-    final rootDir = Directory(libraryPath);
-    if (!rootDir.existsSync()) {
-      return true;
-    }
-
-    // בדיקה שתיקיית אוצריא קיימת
-    final libraryDir = Directory('$libraryPath${Platform.pathSeparator}אוצריא');
-    if (!libraryDir.existsSync()) {
-      return true;
-    }
-
-    // בדיקה שהתיקייה לא ריקה
-    try {
-      final contents = libraryDir.listSync();
-      if (contents.isEmpty) {
-        return true;
-      }
-    } catch (e) {
-      // אם יש שגיאה בגישה לתיקייה, נחשיב אותה כריקה
-      return true;
-    }
-
-    return false;
+    return impl.checkLibraryIsEmptyNative(libraryPath);
   }
 
   Future<void> refreshLibrary() async {

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -30,8 +29,10 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/navigation/calendar_cubit.dart';
 import 'package:otzaria/widgets/ad_popup_dialog.dart';
-import 'package:window_manager/window_manager.dart';
-import 'package:otzaria/main.dart' show appWindowListener;
+
+// Conditional imports for platform-specific code
+import 'main_window_screen_platform.dart'
+    if (dart.library.html) 'main_window_screen_platform_web.dart' as platform;
 
 class MainWindowScreen extends StatefulWidget {
   const MainWindowScreen({super.key});
@@ -91,20 +92,19 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   /// Setup synchronization between window fullscreen state and settings
   void _setupFullscreenSync() {
-    if (kIsWeb ||
-        (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)) {
+    if (!platform.isDesktopPlatform) {
       return;
     }
 
     // Listen for fullscreen changes from the window manager (e.g., user presses F11 in OS)
-    appWindowListener?.onFullscreenChanged = (isFullscreen) {
+    platform.setupFullscreenCallback((isFullscreen) {
       if (!mounted) return;
       final settingsBloc = context.read<SettingsBloc>();
       // Only update if the state is different to avoid loops
       if (settingsBloc.state.isFullscreen != isFullscreen) {
         settingsBloc.add(UpdateIsFullscreen(isFullscreen));
       }
-    };
+    });
   }
 
   /// Restore fullscreen state from settings when app starts
@@ -112,14 +112,13 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (_hasRestoredFullscreen) return;
     _hasRestoredFullscreen = true;
 
-    if (kIsWeb ||
-        (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS)) {
+    if (!platform.isDesktopPlatform) {
       return;
     }
 
     final settingsState = context.read<SettingsBloc>().state;
     if (settingsState.isFullscreen) {
-      await windowManager.setFullScreen(true);
+      await platform.setWindowFullScreen(true);
     }
   }
 
@@ -140,7 +139,9 @@ class MainWindowScreenState extends State<MainWindowScreen>
   @override
   void dispose() {
     // Clean up fullscreen callback
-    appWindowListener?.onFullscreenChanged = null;
+    if (platform.isDesktopPlatform) {
+      platform.setupFullscreenCallback((_) {});
+    }
     _calendarCubit.close();
     pageController.dispose();
     super.dispose();

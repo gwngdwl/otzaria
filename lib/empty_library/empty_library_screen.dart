@@ -1,11 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
-import 'dart:io' show Platform;
 import 'package:otzaria/core/scaffold_messenger.dart';
+
+// Platform check helper for web compatibility
+bool get _isMobilePlatform {
+  if (kIsWeb) return false;
+  // Use defaultTargetPlatform which works on all platforms
+  return defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+}
 
 class EmptyLibraryScreen extends StatelessWidget {
   final VoidCallback onLibraryLoaded;
@@ -53,6 +61,9 @@ class _EmptyLibraryView extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context, EmptyLibraryState state) {
+    final isMobile = _isMobilePlatform;
+    final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -61,7 +72,16 @@ class _EmptyLibraryView extends StatelessWidget {
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
-        if (!Platform.isAndroid && !Platform.isIOS) const SizedBox(height: 32),
+        if (kIsWeb) ...[
+          const SizedBox(height: 16),
+          const Text(
+            'גרסת הווב דורשת חיבור לשרת ספרייה',
+            style: TextStyle(fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+        ],
+        if (!isMobile && !kIsWeb) const SizedBox(height: 32),
         if (state.selectedPath != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
@@ -72,7 +92,7 @@ class _EmptyLibraryView extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
           ),
-        if (!Platform.isAndroid && !Platform.isIOS)
+        if (!isMobile && !kIsWeb)
           ElevatedButton.icon(
             onPressed: state.isDownloading
                 ? null
@@ -81,8 +101,8 @@ class _EmptyLibraryView extends StatelessWidget {
             icon: const Icon(FluentIcons.folder_open_24_regular),
             label: const Text('בחר תיקייה'),
           ),
-        const SizedBox(height: 32),
-        if (Platform.isAndroid)
+        if (!kIsWeb) const SizedBox(height: 32),
+        if (isAndroid)
           ElevatedButton.icon(
             onPressed: state.isDownloading
                 ? null

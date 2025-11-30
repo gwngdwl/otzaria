@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -20,6 +20,10 @@ class NotificationService {
   bool _permissionsGranted = false;
 
   Future<void> init() async {
+    // Skip initialization on web
+    if (kIsWeb) {
+      return;
+    }
     // Initialize timezone database
     tz.initializeTimeZones();
     // Set default timezone to Israel
@@ -54,6 +58,11 @@ class NotificationService {
 
   /// Request notification permissions (Android 13+ and iOS)
   Future<bool> requestPermissions() async {
+    // Skip on web
+    if (kIsWeb) {
+      return false;
+    }
+    
     if (Platform.isAndroid) {
       final androidPlugin =
           flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
@@ -107,6 +116,11 @@ class NotificationService {
     required int reminderMinutes,
     bool soundEnabled = true,
   }) async {
+    // Skip on web
+    if (kIsWeb) {
+      return;
+    }
+    
     // Check permissions before scheduling
     if (!_permissionsGranted) {
       if (kDebugMode) {
@@ -162,6 +176,11 @@ class NotificationService {
   }
 
   Future<void> cancelAllNotifications() async {
+    // Skip on web
+    if (kIsWeb) {
+      return;
+    }
+    
     await flutterLocalNotificationsPlugin.cancelAll();
   }
 }

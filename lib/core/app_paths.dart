@@ -1,13 +1,16 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import 'package:otzaria/core/platform/platform.dart' as platform;
+
+// Conditional imports for non-web platforms
+import 'app_paths_io.dart' if (dart.library.html) 'app_paths_web.dart'
+    as paths_impl;
 
 /// Utility class for managing application paths.
 /// Centralizes path construction logic to avoid duplication.
 class AppPaths {
-  /// Gets the main library path from settings. Defaults to 'C:/אוצריא' for Windows if not set.
+  /// Gets the main library path from settings. Defaults based on platform.
   static Future<String> getLibraryPath() async {
     // Check existing library path setting
     final currentPath = Settings.getValue('key-library-path');
@@ -17,22 +20,7 @@ class AppPaths {
     }
 
     // Determine default path based on platform
-    String libraryPath;
-    if (Platform.isIOS) {
-      libraryPath = (await getApplicationDocumentsDirectory()).path;
-    } else if (Platform.isAndroid) {
-      try {
-        libraryPath = (await getExternalStorageDirectory())?.path ??
-            (await getApplicationDocumentsDirectory()).path;
-      } catch (_) {
-        libraryPath = (await getApplicationDocumentsDirectory()).path;
-      }
-    } else if (Platform.isWindows) {
-      libraryPath = 'C:/אוצריא';
-    } else {
-      // Linux, macOS: use application support directory for consistency
-      libraryPath = (await getApplicationSupportDirectory()).path;
-    }
+    String libraryPath = await platform.getDefaultLibraryPath();
 
     await Settings.setValue('key-library-path', libraryPath);
     return libraryPath;
@@ -55,44 +43,15 @@ class AppPaths {
 
   /// Resolves the notes database path - for cross-platform compatibility
   static Future<String> resolveNotesDbPath(String fileName) async {
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      // Windows, Linux, macOS: this will go into application support directory
-      final support = await getApplicationSupportDirectory();
-      final dbDir = Directory(p.join(support.path, 'databases'));
-      if (!await dbDir.exists()) await dbDir.create(recursive: true);
-      return p.join(dbDir.path, fileName);
-    } else {
-      // Mobile: the standard path for sqflite
-      final dbs = await getDatabasesPath();
-      final dbDir = Directory(dbs);
-      if (!await dbDir.exists()) await dbDir.create(recursive: true);
-      return p.join(dbs, fileName);
-    }
+    return paths_impl.resolveNotesDbPath(fileName);
   }
 
   /// Creates necessary directories for the application
-  /// Note: Does NOT create the library path itself - only index directories
-  /// The library path should be created by the user or during library download
   static Future<void> createNecessaryDirectories() async {
-    // רק ניצור את תיקיות האינדקס, לא את תיקיית הספרייה עצמה
-    // תיקיית הספרייה תיווצר רק כשמורידים ספרייה או כשהמשתמש בוחר תיקייה קיימת
-    final libraryPath = await getLibraryPath();
-    final libraryDir = Directory(libraryPath);
-    
-    // אם תיקיית הספרייה לא קיימת, לא ניצור אותה
-    // רק נוודא שתיקיות האינדקס קיימות אם תיקיית הספרייה קיימת
-    if (await libraryDir.exists()) {
-      final dirs = [
-        await getIndexPath(),
-        await getRefIndexPath(),
-      ];
-
-      for (final dirPath in dirs) {
-        final directory = Directory(dirPath);
-        if (!await directory.exists()) {
-          await directory.create(recursive: true);
-        }
-      }
+    if (kIsWeb) {
+      // Web doesn't need directory creation
+      return;
     }
+    await paths_impl.createNecessaryDirectories();
   }
 }
