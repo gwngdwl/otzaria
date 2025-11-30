@@ -99,9 +99,9 @@ dependencies:
       ref: master
   collection: ^1.18.0
   search_engine:
-    #path: ../search_engine
+    #path: ./search_engine_local
     git:
-      url: https://github.com/Sivan22/otzaria_search_engine
+      url: https://github.com/gwngdwl/otzaria_search_engine
       ref: use-regex
   flutter_archive: ^6.0.3
   window_manager: ^0.5.1
