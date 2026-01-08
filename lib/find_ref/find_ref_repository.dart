@@ -21,10 +21,11 @@ class FindRefRepository {
     }
 
     // שלב 1: שלוף יותר תוצאות מהרגיל כדי לפצות על אלו שיסוננו
-    // שולחים את השאילתה המקורית ל-Tantivy (ללא עיבוד)
-    // הסינון והדירוג יתבצעו בצד שלנו
+    // שולחים את השאילתה המנוקה (cleanedQuery) ל-Tantivy
+    // זה קריטי כדי לנטרל תווים מיוחדים (כמו גרשיים) שמשבשים את החיפוש
+    // ומאפשר למצוא "רמב"ן" ע"י חיפוש "רמב ן" (כך זה מאונדקס)
     final rawResults = await TantivyDataProvider.instance.searchRefs(
-      ref,
+      cleanedQuery,
       300,
       false,
     );
