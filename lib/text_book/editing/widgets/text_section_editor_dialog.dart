@@ -13,7 +13,7 @@ import '../services/preview_renderer.dart';
 import '../models/editor_settings.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/core/scaffold_messenger.dart';
-import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/widgets/confirmation_dialog.dart';
 import 'markdown_toolbar.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
@@ -27,8 +27,6 @@ import 'package:otzaria/widgets/rtl_text_field.dart';
 /// - Parallel column layout for simultaneous editing and preview
 class TextSectionEditorDialog extends StatefulWidget {
   final String bookId;
-  final String? category;
-  final String? fileType;
   final int sectionIndex;
   final String sectionId;
   final String initialContent;
@@ -39,8 +37,6 @@ class TextSectionEditorDialog extends StatefulWidget {
   const TextSectionEditorDialog({
     super.key,
     required this.bookId,
-    this.category,
-    this.fileType,
     required this.sectionIndex,
     required this.sectionId,
     required this.initialContent,
@@ -223,11 +219,7 @@ class _TextSectionEditorDialogState extends State<TextSectionEditorDialog> {
         try {
           // Force a content reload from file system to ensure refresh
           final dataProvider = FileSystemData.instance;
-          await dataProvider.getBookText(
-            widget.bookId,
-            category: widget.category,
-            fileType: widget.fileType,
-          );
+          await dataProvider.getBookText(widget.bookId);
 
           // Show success feedback
           UiSnack.showSuccess(UiSnack.savedSuccessfully);

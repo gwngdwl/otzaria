@@ -73,9 +73,9 @@ class TextBookTab extends OpenedTab {
     final bool effectiveSplitedView =
         splitedView ?? (Settings.getValue<bool>('key-splited-view') ?? false);
 
-    // מצב צורת הדף הוא פר-ספר - ברירת המחדל היא false (תצוגה רגילה)
-    // רק אם הספר כבר היה פתוח במצב צורת הדף, הוא יישאר כך
-    final bool effectiveShowPageShapeView = showPageShapeView ?? false;
+    // קביעת ברירת המחדל של צורת הדף מההגדרות אם לא סופק
+    final bool effectiveShowPageShapeView =
+      showPageShapeView ?? (Settings.getValue<bool>('key-page-shape-view') ?? false);
 
     // Initialize the bloc with initial state
     bloc = TextBookBloc(
@@ -104,6 +104,7 @@ class TextBookTab extends OpenedTab {
     _stateSubscription = bloc.stream.listen((state) {
       if (state is TextBookLoaded && state.visibleIndices.isNotEmpty) {
         index = state.visibleIndices.first;
+        debugPrint('DEBUG: עדכון אינדקס ל-$index עבור ספר: ${book.title}');
       }
     });
   }
@@ -134,15 +135,11 @@ class TextBookTab extends OpenedTab {
     debugPrint(
         'DEBUG: טעינת טאב ${json['title']} עם splitedView: $splitedView (מ-JSON: ${json['splitedView']})');
 
-    final TextBook restoredBook = json['book'] != null
-        ? Book.fromJson(Map<String, dynamic>.from(json['book'])) as TextBook
-        : TextBook(
-            title: json['title'],
-          );
-
     return TextBookTab(
       index: json['initalIndex'],
-      book: restoredBook,
+      book: TextBook(
+        title: json['title'],
+      ),
       commentators: List<String>.from(json['commentators']),
       splitedView: splitedView,
       showPageShapeView: json['showPageShapeView'] ?? false,
@@ -185,7 +182,6 @@ class TextBookTab extends OpenedTab {
 
     return {
       'title': title,
-      'book': book.toJson(),
       'initalIndex': currentIndex,
       'commentators': commentators,
       'splitedView': splitedView,

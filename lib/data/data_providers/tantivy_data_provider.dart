@@ -13,10 +13,7 @@ import 'package:otzaria/core/app_paths.dart';
 class TantivyDataProvider {
   /// Instance of the search engine pointing to the index directory
   late Future<SearchEngine> engine;
-
-  /// Track if index is being reopened to prevent concurrent reopens
-  bool _isReopening = false;
-  DateTime? _lastReopenTime;
+  late Future<ReferenceSearchEngine> refEngine;
 
   static final TantivyDataProvider _singleton = TantivyDataProvider._internal();
   static TantivyDataProvider instance = _singleton;
@@ -44,56 +41,27 @@ class TantivyDataProvider {
   late List<String> booksDone = [];
 
   TantivyDataProvider._internal() {
-    // Initialize engines
+    // Initialize engine immediately in constructor to avoid LateInitializationError
     engine = _initEngine();
+    refEngine = _initRefEngine();
     _loadBooksDone();
   }
 
   Future<SearchEngine> _initEngine() async {
-    String? indexPath;
+    String indexPath = await AppPaths.getIndexPath();
+    return SearchEngine(path: indexPath);
+  }
+
+  Future<ReferenceSearchEngine> _initRefEngine() async {
+    String refIndexPath = await AppPaths.getRefIndexPath();
     try {
-      indexPath = await AppPaths.getIndexPath();
-      return SearchEngine(path: indexPath);
+      return ReferenceSearchEngine(path: refIndexPath);
     } catch (e) {
-      debugPrint('❌ Failed to initialize search engine: $e');
-      if (indexPath != null) {
-        debugPrint(
-            '⚠️ Attempting to recover by resetting index at $indexPath...');
-        try {
-          final indexDirectory = Directory(indexPath);
-
-          // Attempt to delete the lock file specifically first
-          final lockFile = File('${indexDirectory.path}/.tantivy-writer.lock');
-          if (lockFile.existsSync()) {
-            try {
-              lockFile.deleteSync();
-              debugPrint('🔓 Deleted stale lock file');
-            } catch (e) {
-              debugPrint('⚠️ Failed to delete lock file: $e');
-            }
-          }
-
-          if (indexDirectory.existsSync()) {
-            try {
-              indexDirectory.deleteSync(recursive: true);
-            } catch (e) {
-              debugPrint('❌ Failed to delete index directory: $e');
-              // If we can't delete the directory, we probably can't use it.
-              rethrow;
-            }
-          }
-          indexDirectory.createSync(recursive: true);
-          return SearchEngine(path: indexPath);
-        } catch (e2) {
-          debugPrint('❌ Failed to recover search engine: $e2');
-        }
+      if (e.toString().contains("SchemaError")) {
+        await resetIndex(refIndexPath, closeBooksDoneBox: false);
+        return ReferenceSearchEngine(path: refIndexPath);
       }
-
-      // Fallback to temporary directory to prevent app crash
-      debugPrint('⚠️ Falling back to temporary in-memory index');
-      final tempDir =
-          Directory.systemTemp.createTempSync('otzaria_temp_index_');
-      return SearchEngine(path: tempDir.path);
+      rethrow;
     }
   }
 
@@ -112,78 +80,10 @@ class TantivyDataProvider {
     }
   }
 
-  Future<void> _handleSchemaError() async {
-    try {
-      String indexPath = await AppPaths.getIndexPath();
-      await resetIndex(indexPath);
-      await reopenIndex();
-    } catch (e) {
-      debugPrint('❌ Error handling schema error: $e');
-    }
-  }
-
-  Future<void> reopenIndex() async {
-    // Prevent concurrent reopens that would cause lock conflicts
-    if (_isReopening) {
-      debugPrint('⚠️ Index reopen already in progress, skipping...');
-      return;
-    }
-
-    // Prevent too frequent reopens (less than 5 seconds apart)
-    if (_lastReopenTime != null &&
-        DateTime.now().difference(_lastReopenTime!).inSeconds < 5) {
-      debugPrint('⚠️ Index reopen too soon after last reopen, skipping...');
-      return;
-    }
-
-    _isReopening = true;
-    _lastReopenTime = DateTime.now();
-    debugPrint('🔄 Reopening search index...');
-
-    try {
-      // Dispose previous engine to release locks
-      await dispose();
-
-      // Reset engines
-      engine = _initEngine();
-
-      // Check engine
-      engine.then((value) {
-        try {
-          // Test the search engine
-          value
-              .search(
-                  regexTerms: ['a'],
-                  limit: 10,
-                  slop: 0,
-                  maxExpansions: 10,
-                  facets: ["/"],
-                  order: ResultsOrder.catalogue)
-              .then((results) {
-            // Engine test successful
-            debugPrint('✅ Search engine test successful');
-          }).catchError((e) {
-            debugPrint('❌ Engine test error: $e');
-          });
-        } catch (e) {
-          // Log sync engine test error
-          debugPrint('❌ Sync engine test error: $e');
-          if (e.toString() ==
-              "PanicException(Failed to create index: SchemaError(\"An index exists but the schema does not match.\"))") {
-            // Handle schema error asynchronously
-            _handleSchemaError();
-          } else {
-            rethrow;
-          }
-        }
-      });
-
-      await _loadBooksDone();
-
-      debugPrint('✅ Search index reopened successfully');
-    } finally {
-      _isReopening = false;
-    }
+  void reopenIndex() {
+    engine = _initEngine();
+    refEngine = _initRefEngine();
+    _loadBooksDone();
   }
 
   /// Persists the list of indexed books to disk using Hive storage.
@@ -257,42 +157,13 @@ class TantivyDataProvider {
     }
   }
 
-  Future<void> resetIndex(String indexPath,
-      {bool closeBooksDoneBox = true}) async {
-    debugPrint('🔄 Resetting index at: $indexPath');
-
-    // Close engines first to release locks
-    try {
-      await dispose();
-      debugPrint('🔒 Engines disposed before reset');
-    } catch (e) {
-      debugPrint('⚠️ Error disposing engines before reset: $e');
-    }
-
+  Future<void> resetIndex(String indexPath, {bool closeBooksDoneBox = true}) async {
     Directory indexDirectory = Directory(indexPath);
     if (closeBooksDoneBox) {
-      try {
-        Hive.box(name: 'books_indexed', directory: indexPath).close();
-      } catch (e) {
-        debugPrint('⚠️ Error closing Hive box: $e');
-      }
+      Hive.box(name: 'books_indexed', directory: indexPath).close();
     }
-
-    if (indexDirectory.existsSync()) {
-      try {
-        indexDirectory.deleteSync(recursive: true);
-      } catch (e) {
-        debugPrint('❌ Failed to delete index directory: $e');
-        // On Windows, sometimes files are locked for a bit longer
-        await Future.delayed(const Duration(seconds: 1));
-        if (indexDirectory.existsSync()) {
-          indexDirectory.deleteSync(recursive: true);
-        }
-      }
-    }
+    indexDirectory.deleteSync(recursive: true);
     indexDirectory.createSync(recursive: true);
-
-    debugPrint('✅ Index reset completed');
   }
 
   /// Performs an asynchronous stream-based search operation across indexed texts.
@@ -310,6 +181,16 @@ class TantivyDataProvider {
     final results =
         await searchRepository.searchTexts(query, facets, limit, fuzzy: fuzzy);
     yield results;
+  }
+
+  Future<List<ReferenceSearchResult>> searchRefs(
+      String reference, int limit, bool fuzzy) async {
+    final engine = await refEngine;
+    return engine.search(
+        query: reference,
+        limit: limit,
+        fuzzy: fuzzy,
+        order: ResultsOrder.relevance);
   }
 
   /// ספירה מקבצת של תוצאות עבור מספר facets בבת אחת - לשיפור ביצועים
@@ -389,17 +270,9 @@ class TantivyDataProvider {
     isIndexing.value = false;
     final index = await engine;
     await index.clear();
+    final refIndex = await refEngine;
+    await refIndex.clear();
     booksDone.clear();
     await saveBooksDoneToDisk();
-  }
-
-  /// Dispose of resources and close engines
-  Future<void> dispose() async {
-    try {
-      final index = await engine;
-      index.dispose();
-    } catch (e) {
-      debugPrint('⚠️ Error disposing search engine: $e');
-    }
   }
 }

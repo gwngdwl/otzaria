@@ -75,11 +75,11 @@ class MockTextBookRepository extends _i1.Mock
       ) as _i3.Future<List<_i4.TocEntry>>);
 
   @override
-  _i3.Future<List<String>> getAvailableCommentators(_i4.TextBook? book) =>
+  _i3.Future<List<String>> getAvailableCommentators(List<_i6.Link>? links) =>
       (super.noSuchMethod(
         Invocation.method(
           #getAvailableCommentators,
-          [book],
+          [links],
         ),
         returnValue: _i3.Future<List<String>>.value(<String>[]),
       ) as _i3.Future<List<String>>);

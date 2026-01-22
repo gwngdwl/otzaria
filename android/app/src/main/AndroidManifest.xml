@@ -3,18 +3,6 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
-    
-    <!-- Notification permissions -->
-    <!-- POST_NOTIFICATIONS: Required for Android 13+ to show notifications -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- SCHEDULE_EXACT_ALARM: Required for Android 12+ to schedule exact alarms -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- USE_EXACT_ALARM: Alternative permission for exact alarms -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <!-- WAKE_LOCK: Allows the app to wake up the device for notifications -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- RECEIVE_BOOT_COMPLETED: Allows rescheduling notifications after device reboot -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Add queries for URL launcher -->
     <queries>
         <!-- For email support -->
@@ -58,18 +46,5 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-            
-        <!-- Receiver for handling notifications after device reboot -->
-        <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
-                  android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </receiver>
-        <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" 
-                  android:exported="false" />
     </application>
 </manifest>

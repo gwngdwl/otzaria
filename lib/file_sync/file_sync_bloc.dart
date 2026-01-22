@@ -38,7 +38,7 @@ class FileSyncBloc extends Bloc<FileSyncEvent, FileSyncState> {
       ));
       return;
     }
-
+    
     // If already syncing or completed, reset first
     if (state.status == FileSyncStatus.syncing ||
         state.status == FileSyncStatus.completed) {

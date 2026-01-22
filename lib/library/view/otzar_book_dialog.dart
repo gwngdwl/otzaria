@@ -5,7 +5,7 @@ import '../../utils/otzar_utils.dart';
 import '../../core/scaffold_messenger.dart';
 
 class OtzarBookDialog extends StatelessWidget {
-  final ExternalLibraryBook book;
+  final ExternalBook book;
 
   const OtzarBookDialog({super.key, required this.book});
 

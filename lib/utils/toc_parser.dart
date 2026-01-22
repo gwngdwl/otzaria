@@ -1,52 +1,16 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 
 /// Shared TOC parsing utilities used by both the TextBook navigator and
 /// the Shamor Zachor scanner. This ensures a single source of truth for
 /// how headings are detected and converted to structures.
 class TocParser {
-  /// Parse TOC from a file path or database and return a flat structure compatible with
+  /// Parse TOC from a file path and return a flat structure compatible with
   /// Shamor Zachor scanner (list of maps with text/index/level).
   static Future<List<Map<String, dynamic>>> parseFlatFromFile(
       String bookPath) async {
     try {
-      // Extract book title from path
-      final bookTitle =
-          bookPath.split(Platform.pathSeparator).last.replaceAll('.txt', '');
-
-      // Try to get TOC from LibraryProviderManager (handles both DB and files)
-      try {
-        // Note: We don't have category/fileType here, so we pass empty strings
-        // This relies on the fuzzy matching in LibraryProviderManager
-        final tocEntries =
-          await LibraryProviderManager.instance.getBookToc(bookTitle, '', 'txt');
-        if (tocEntries != null && tocEntries.isNotEmpty) {
-          // Convert hierarchical TOC to flat structure
-          final flatToc = <Map<String, dynamic>>[];
-          void flattenToc(List<TocEntry> entries) {
-            for (final entry in entries) {
-              flatToc.add({
-                'text': entry.text,
-                'index': entry.index,
-                'level': entry.level,
-              });
-              if (entry.children.isNotEmpty) {
-                flattenToc(entry.children);
-              }
-            }
-          }
-
-          flattenToc(tocEntries);
-          return flatToc;
-        }
-      } catch (e) {
-        if (kDebugMode) debugPrint('Error getting TOC from provider: $e');
-        // Fall through to file reading
-      }
-
-      // Fallback to file reading
       final file = File(bookPath);
       if (!await file.exists()) {
         if (kDebugMode) debugPrint('Book file not found: $bookPath');
@@ -79,25 +43,11 @@ class TocParser {
     final List<_Header> headers = [];
 
     for (int i = 0; i < lines.length; i++) {
-      final rawLine = lines[i];
-      final line = rawLine.trimLeft();
-
-      // Markdown headings: # .. ######
-      // We require a space after the hashes to reduce false positives.
-      final md = RegExp(r'^(#{1,6})\s+(.+?)\s*$').firstMatch(line);
-      if (md != null) {
-        final level = md.group(1)!.length;
-        final text = md.group(2)!.trim();
-        if (text.isNotEmpty) {
-          headers.add(_Header(text: text, index: i, level: level));
-        }
-        continue;
-      }
+      final line = lines[i];
 
       // Match <h1>..</h1> up to <h6>
-      final lower = line.toLowerCase();
-      if (lower.startsWith('<h') && lower.length > 3) {
-        final c = lower[2];
+      if (line.startsWith('<h') && line.length > 3) {
+        final c = line[2];
         final code = c.codeUnitAt(0);
         if (code >= '1'.codeUnitAt(0) && code <= '6'.codeUnitAt(0)) {
           final level = int.tryParse(c) ?? 1;

@@ -105,12 +105,9 @@ class PdfBookTab extends OpenedTab {
     final bool shouldOpenLeftPane =
         (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
             (Settings.getValue<bool>('key-default-sidebar-open') ?? false);
-
-    final PdfBook restoredBook = json['book'] != null
-      ? Book.fromJson(Map<String, dynamic>.from(json['book'])) as PdfBook
-      : PdfBook(title: getTitleFromPath(json['path']), path: json['path']);
     return PdfBookTab(
-      book: restoredBook,
+        book:
+            PdfBook(title: getTitleFromPath(json['path']), path: json['path']),
         pageNumber: json['pageNumber'],
         openLeftPane: shouldOpenLeftPane,
         isPinned: json['isPinned'] ?? false);
@@ -141,7 +138,6 @@ class PdfBookTab extends OpenedTab {
 
     return {
       'path': book.path,
-      'book': book.toJson(),
       'pageNumber': currentPage,
       'isPinned': isPinned,
       'type': 'PdfBookTab'

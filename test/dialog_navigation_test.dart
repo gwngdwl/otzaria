@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/widgets/confirmation_dialog.dart';
+import 'package:otzaria/widgets/input_dialog.dart';
 
 void main() {
   group('ConfirmationDialog Tests', () {

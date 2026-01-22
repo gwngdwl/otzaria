@@ -39,16 +39,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
   @override
   void initState() {
     super.initState();
-    _loadContent();
-  }
-
-  void _loadContent() {
-    // Validate link before loading content
-    if (widget.link.path2.isEmpty || widget.link.index2 <= 0) {
-      content = Future.value('שגיאה: קישור לא תקין');
-    } else {
-      content = widget.link.content;
-    }
+    content = widget.link.content;
   }
 
   @override
@@ -59,9 +50,7 @@ class _CommentaryContentState extends State<CommentaryContent> {
     if (oldWidget.link.path2 != widget.link.path2 ||
         oldWidget.link.index2 != widget.link.index2 ||
         oldWidget.link.heRef != widget.link.heRef) {
-      setState(() {
-        _loadContent();
-      });
+      content = widget.link.content;
     }
   }
 

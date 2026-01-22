@@ -2,8 +2,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/find_ref/find_ref_event.dart';
 import 'package:otzaria/find_ref/find_ref_repository.dart';
 import 'package:otzaria/find_ref/find_ref_state.dart';
-import 'package:otzaria/find_ref/db_reference_result.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:search_engine/search_engine.dart';
 
 class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
   final FindRefRepository findRefRepository;
@@ -16,13 +16,13 @@ class FindRefBloc extends Bloc<FindRefEvent, FindRefState> {
 
   Future<void> _onSearchRefRequested(
       SearchRefRequested event, Emitter<FindRefState> emit) async {
-    if (event.refText.length < 2) {
+    if (event.refText.length < 3) {
       emit(const FindRefSuccess([]));
       return;
     }
     emit(FindRefLoading());
     try {
-      final List<DbReferenceResult> refs =
+      final List<ReferenceSearchResult> refs =
           await findRefRepository.findRefs(event.refText);
       emit(FindRefSuccess(refs));
     } catch (e) {

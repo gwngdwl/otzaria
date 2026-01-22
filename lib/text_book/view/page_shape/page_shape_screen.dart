@@ -21,13 +21,11 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:collection/collection.dart';
 import 'dart:async';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
 /// קבועים לחישוב רוחב חלוניות המפרשים
 const double _kCommentaryPaneWidthFactor = 0.17;
 
-/// רוחב הכותרת האנכית + רווחים + מפריד (20 לכותרת + 4 לרווח + 8 למפריד)
-const double _kCommentaryLabelAndSpacingWidth = 32.0;
+
 
 /// מסך תצוגת צורת הדף - מציג את הטקסט המרכזי עם מפרשים מסביב
 class PageShapeScreen extends StatefulWidget {
@@ -97,22 +95,17 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     final state = context.read<TextBookBloc>().state;
     if (state is! TextBookLoaded) return;
 
-    final config = PageShapeSettingsManager.loadConfiguration(
-      state.book.title,
-      heCategories: state.book.heCategories,
-    );
+    final config = PageShapeSettingsManager.loadConfiguration(state.book.title);
     _columnVisibility =
         PageShapeSettingsManager.getColumnVisibility(state.book.title);
 
     final Map<String, String?> commentators;
     if (config != null) {
-      // יש הגדרה שמורה - צריך להתאים שמות בסיסיים לשמות מלאים
-      // (כי הגדרות קטגוריה שומרות רק שמות בסיסיים כמו "רמב"ן")
-      commentators = _resolveCommentatorNames(config, state.links);
+      // יש הגדרה שמורה - להשתמש בה (גם אם ריקה)
+      commentators = config;
     } else {
       // אין הגדרה שמורה בכלל - השתמש בברירות מחדל
-      commentators =
-          await DefaultCommentators.getDefaults(state.book, links: state.links);
+      commentators = await DefaultCommentators.getDefaults(state.book);
     }
 
     if (mounted) {
@@ -126,37 +119,6 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     }
   }
 
-  /// התאמת שמות מפרשים בסיסיים לשמות מלאים מתוך הקישורים הזמינים
-  /// למשל: "רמב"ן" → "רמב"ן על בבא מציעא"
-  Map<String, String?> _resolveCommentatorNames(
-      Map<String, String?> config, List<Link> links) {
-    // קבלת רשימת שמות המפרשים הזמינים
-    final availableCommentators = links
-        .where((link) =>
-            link.connectionType == 'commentary' ||
-            link.connectionType == 'targum')
-        .map((link) => utils.getTitleFromPath(link.path2))
-        .toSet()
-        .toList();
-
-    return Map.fromEntries(config.entries.map((entry) {
-      return MapEntry(
-        entry.key,
-        _findMatchingCommentator(entry.value, availableCommentators),
-      );
-    }));
-  }
-
-  /// מחפש מפרש שמתאים לשם הנתון (בסיסי או מלא)
-  String? _findMatchingCommentator(String? shortName, List<String> available) {
-    if (shortName == null) return null;
-
-    // The order of matching is important: exact, then startsWith, then contains.
-    return available.firstWhereOrNull((name) => name == shortName) ??
-        available.firstWhereOrNull((name) => name.startsWith(shortName)) ??
-        available.firstWhereOrNull((name) => name.contains(shortName));
-  }
-
   /// הסתרת טור
   void _hideColumn(String column) {
     final state = context.read<TextBookBloc>().state;
@@ -165,13 +127,8 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
     setState(() {
       _columnVisibility[column] = false;
     });
-
-    // שמירה גלובלית אלא אם יש הגדרות פר-ספר
-    final hasBookSettings =
-        PageShapeSettingsManager.hasBookSpecificSettings(state.book.title);
     PageShapeSettingsManager.saveColumnVisibility(
-        state.book.title, _columnVisibility,
-        saveAsGlobal: !hasBookSettings);
+        state.book.title, _columnVisibility);
   }
 
   /// בניית widget למצב ריק של טור
@@ -237,7 +194,6 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
       builder: (context) => PageShapeSettingsDialog(
         availableCommentators: availableCommentators,
         bookTitle: state.book.title,
-        heCategories: state.book.heCategories,
         currentLeft: _leftCommentator,
         currentRight: _rightCommentator,
         currentBottom: _bottomCommentator,
@@ -314,7 +270,6 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                       ],
                       ResizableDragHandle(
                         isVertical: true,
-                        showDivider: false,
                         onDragDelta: (delta) {
                           setState(() {
                             _leftWidth = ((_leftWidth ?? 0) - delta).clamp(
@@ -339,7 +294,6 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
                     if (_columnVisibility['right'] == true) ...[
                       ResizableDragHandle(
                         isVertical: true,
-                        showDivider: false,
                         onDragDelta: (delta) {
                           setState(() {
                             _rightWidth = ((_rightWidth ?? 0) + delta).clamp(
@@ -395,20 +349,18 @@ class _PageShapeScreenState extends State<PageShapeScreen> {
               // Bottom Commentary
               if (_bottomCommentator != null ||
                   _bottomRightCommentator != null) ...[
-                // מפריד אופקי לגרירה עם קווים באמצע
-                _HorizontalDragHandle(
-                  leftWidth: _leftWidth,
-                  rightWidth: _rightWidth,
-                  leftCommentator: _leftCommentator,
-                  rightCommentator: _rightCommentator,
-                  onPanUpdate: (details) {
+                // מפריד אופקי לגרירה
+                ResizableDragHandle(
+                  isVertical: false,
+                  hitSize: 16,
+                  cursor: SystemMouseCursors.resizeRow,
+                  onDragDelta: (delta) {
                     setState(() {
-                      _bottomHeight = ((_bottomHeight ?? 0) - details.delta.dy)
-                          .clamp(
-                              80.0, MediaQuery.of(context).size.height * 0.5);
+                      _bottomHeight = ((_bottomHeight ?? 0) - delta).clamp(
+                          80.0, MediaQuery.of(context).size.height * 0.5);
                     });
                   },
-                  onPanEnd: _saveSizes,
+                  onDragEnd: _saveSizes,
                 ),
                 SizedBox(
                   height: _bottomHeight ??
@@ -539,19 +491,16 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   @override
   void initState() {
     super.initState();
-    // דוחה את הטעינה כדי לוודא שכל ה-providers מוכנים וה-bloc זמין
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _loadCommentary();
-        _setupBlocListener();
-      }
-    });
+    _loadCommentary();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // הסרנו את הקריאה מכאן כדי למנוע כפילות או בעיות context מוקדמות
+    // הגדרת המאזין רק פעם אחת
+    if (_blocSubscription == null) {
+      _setupBlocListener();
+    }
   }
 
   @override
@@ -628,22 +577,17 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   }
 
   Future<void> _loadCommentary() async {
-    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      String? categoryPath;
-
-      // 1. נסיון לקבל נתיב ממערכת הקבצים/מסד הנתונים
-      // שימוש בפונקציה חדשה שבודקת גם דינמית מול ה-DB אם המטמון רך
-      categoryPath = await FileSystemData.instance
-          .findBookCategoryPath(widget.commentatorName);
+      final book = TextBook(title: widget.commentatorName);
+      final bookContent = await book.text;
+      final lines = bookContent.split('\n');
 
       if (!mounted) return;
 
-      final bloc = context.read<TextBookBloc>();
-      final state = bloc.state;
-
+      // טעינת הקישורים הרלוונטיים למפרש זה
+      final state = context.read<TextBookBloc>().state;
       if (state is TextBookLoaded) {
         // סינון קישורים לפי שם המפרש ולפי סוג הקישור (commentary/targum)
         _relevantLinks = state.links.where((link) {
@@ -652,55 +596,22 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
               (link.connectionType == 'commentary' ||
                   link.connectionType == 'targum');
         }).toList();
+      }
 
-        // אם עדיין אין נתיב, ננסה לחלץ מקישורים (Fallback)
-        if (categoryPath == null && _relevantLinks.isNotEmpty) {
-          final firstLinkPath = _relevantLinks.first.path2;
+      if (mounted) {
+        setState(() {
+          _content = lines;
+          _isLoading = false;
+          _lastSyncedIndex = null; // איפוס לסנכרון ראשוני
+        });
 
-          var normalizedPath = firstLinkPath;
-          if (normalizedPath.startsWith('/') ||
-              normalizedPath.startsWith('\\')) {
-            normalizedPath = normalizedPath.substring(1);
-          }
-
-          final lastSeparatorIndex = normalizedPath.lastIndexOf('/');
-          final directoryPath = lastSeparatorIndex != -1
-              ? normalizedPath.substring(0, lastSeparatorIndex)
-              : (normalizedPath.contains('\\')
-                  ? normalizedPath.substring(
-                      0, normalizedPath.lastIndexOf('\\'))
-                  : '');
-
-          if (directoryPath.isNotEmpty) {
-            categoryPath =
-                directoryPath.replaceAll('/', ', ').replaceAll('\\', ', ');
-          } else {
-            // אם הנתיב הוא רק שם הספר, נסה להמיר אותו לקטגוריה
-            // (אם זה לא עובד בחלק 1, כנראה שגם זה לא יעבוד, אבל ניתן סיכוי)
-            categoryPath =
-                normalizedPath.replaceAll('/', ', ').replaceAll('\\', ', ');
-          }
+        // סנכרון ראשוני
+        if (state is TextBookLoaded) {
+          _syncWithMainText(state);
         }
       }
-
-      final book =
-          TextBook(title: widget.commentatorName, categoryPath: categoryPath);
-      final bookContent = await book.text;
-      final lines = bookContent.split('\n');
-
-      if (!mounted) return;
-
-      setState(() {
-        _content = lines;
-        _isLoading = false;
-        _lastSyncedIndex = null; // איפוס לסנכרון ראשוני
-      });
-
-      // סנכרון ראשוני
-      if (state is TextBookLoaded) {
-        _syncWithMainText(state);
-      }
     } catch (e) {
+      debugPrint('Error loading commentary ${widget.commentatorName}: $e');
       if (mounted) {
         setState(() {
           _content = null;
@@ -798,8 +709,7 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
             final fontFamily = widget.isBottom
                 ? bottomFont
                 : settingsState.commentatorsFontFamily;
-            final commentaryFontSize =
-                PageShapeSettingsManager.getCommentaryFontSize();
+            final commentaryFontSize = PageShapeSettingsManager.getCommentaryFontSize();
             return SimpleTextViewer(
               content: _content!,
               fontSize: commentaryFontSize,
@@ -818,70 +728,4 @@ class _CommentaryPaneState extends State<_CommentaryPane> {
   }
 }
 
-/// ידית גרירה אופקית מותאמת אישית עם קווים מתחת למפרשים העליונים
-class _HorizontalDragHandle extends StatelessWidget {
-  final double? leftWidth;
-  final double? rightWidth;
-  final String? leftCommentator;
-  final String? rightCommentator;
-  final ValueChanged<DragUpdateDetails> onPanUpdate;
-  final VoidCallback onPanEnd;
 
-  const _HorizontalDragHandle({
-    this.leftWidth,
-    this.rightWidth,
-    this.leftCommentator,
-    this.rightCommentator,
-    required this.onPanUpdate,
-    required this.onPanEnd,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Widget buildDividerLine(double? width) {
-      return SizedBox(
-        width: (width ??
-                MediaQuery.of(context).size.width *
-                    _kCommentaryPaneWidthFactor) +
-            _kCommentaryLabelAndSpacingWidth,
-        child: Center(
-          child: FractionallySizedBox(
-            widthFactor: 0.5,
-            child: Container(
-              height: 1,
-              color: Theme.of(context).dividerColor,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SizedBox(
-      height: 16,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // קווים מתחת למפרשים העליונים - באמצע הרווח
-          Row(
-            children: [
-              if (leftCommentator != null) buildDividerLine(leftWidth),
-              const Spacer(),
-              if (rightCommentator != null) buildDividerLine(rightWidth),
-            ],
-          ),
-          // אזור גרירה שקוף על כל הרוחב
-          Positioned.fill(
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeRow,
-              child: GestureDetector(
-                onPanUpdate: onPanUpdate,
-                onPanEnd: (_) => onPanEnd(),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

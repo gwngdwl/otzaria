@@ -63,7 +63,6 @@ class _ResizablePreviewPanelState extends State<ResizablePreviewPanel> {
             right: 0,
             child: ResizableDragHandle(
               isVertical: true,
-              showDivider: false,
               onDragStart: () => setState(() => _isResizing = true),
               onDragDelta: (delta) {
                 setState(() {

@@ -11,7 +11,6 @@ class ResizableDragHandle extends StatefulWidget {
     this.onDragDelta,
     this.onDragStart,
     this.onDragEnd,
-    this.showDivider = true,
   });
 
   /// True for a vertical handle (between left/right panes), false for horizontal.
@@ -28,9 +27,6 @@ class ResizableDragHandle extends StatefulWidget {
 
   final VoidCallback? onDragStart;
   final VoidCallback? onDragEnd;
-
-  /// Whether to show the divider line in idle state. If false, the line only appears on hover/drag.
-  final bool showDivider;
 
   @override
   State<ResizableDragHandle> createState() => _ResizableDragHandleState();
@@ -105,12 +101,8 @@ class _ResizableDragHandleState extends State<ResizableDragHandle> {
             final background =
                 theme.colorScheme.primary.withValues(alpha: 0.14 * blend);
             final thickness = lerpDouble(1.0, 3.0, blend) ?? 1.0;
-            
-            // If showDivider is false, only show line when hovering or dragging
-            final showLine = widget.showDivider || blend > 0;
-            final lineColor = showLine
-                ? (Color.lerp(dividerColor, activeColor, blend) ?? dividerColor)
-                : Colors.transparent;
+            final lineColor =
+                Color.lerp(dividerColor, activeColor, blend) ?? dividerColor;
 
             return DecoratedBox(
               decoration: BoxDecoration(color: background),

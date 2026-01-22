@@ -9,7 +9,8 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/widgets/personal_note_editor_dialog.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/widgets/confirmation_dialog.dart';
+import 'package:otzaria/widgets/input_dialog.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class PersonalNotesSidebar extends StatefulWidget {

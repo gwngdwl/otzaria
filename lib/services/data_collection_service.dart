@@ -4,7 +4,6 @@ import 'package:csv/csv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/settings/settings_repository.dart';
 
 /// Service for collecting data required for phone error reporting
@@ -14,33 +13,10 @@ class DataCollectionService {
   static String get _sourceBooksPath =>
       'אוצריא${Platform.pathSeparator}אודות התוכנה${Platform.pathSeparator}SourcesBooks.csv';
 
-  /// Read library version from the database or file
-  /// Returns "unknown" if not found or cannot be read
+  /// Read library version from the version file
+  /// Returns "unknown" if file is missing or cannot be read
   Future<String> readLibraryVersion() async {
     try {
-      // Try reading from database first
-      final dbProvider = SqliteDataProvider.instance;
-      if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
-        try {
-          final bookText = await dbProvider.getBookTextFromDb('גירסת ספריה');
-          if (bookText != null && bookText.isNotEmpty) {
-            // Extract version from the text (remove HTML tags and trim)
-            final cleanText = bookText
-                .replaceAll(RegExp(r'<[^>]*>'), '')
-                .trim()
-                .split('\n')
-                .where((line) => line.trim().isNotEmpty)
-                .first;
-            debugPrint('Library version from DB: $cleanText');
-            return cleanText;
-          }
-        } catch (e) {
-          debugPrint('Error reading library version from DB: $e');
-          // Fall through to file reading
-        }
-      }
-
-      // Fallback to file reading
       final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('Library path not set');
@@ -63,29 +39,10 @@ class DataCollectionService {
     }
   }
 
-  /// Find book ID by matching the book title in database or CSV
-  /// Returns the book ID if found, null if not found or error
+  /// Find book ID in SourcesBooks.csv by matching the book title
+  /// Returns the line number (1-based) if found, null if not found or error
   Future<int?> findBookIdInCsv(String bookTitle) async {
     try {
-      // Try reading from database first
-      final dbProvider = SqliteDataProvider.instance;
-      if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
-        try {
-          final repository = dbProvider.repository;
-          if (repository != null) {
-            final book = await repository.getBookByTitle(bookTitle);
-            if (book != null) {
-              debugPrint('Book ID from DB: ${book.id} for $bookTitle');
-              return book.id;
-            }
-          }
-        } catch (e) {
-          debugPrint('Error reading book ID from DB: $e');
-          // Fall through to CSV reading
-        }
-      }
-
-      // Fallback to CSV reading
       final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('Library path not set');
@@ -137,7 +94,7 @@ class DataCollectionService {
       debugPrint('Book not found in CSV: $bookTitle');
       return null;
     } catch (e) {
-      debugPrint('Error reading book ID: $e');
+      debugPrint('Error reading SourcesBooks.csv: $e');
       return null;
     }
   }
@@ -161,27 +118,10 @@ class DataCollectionService {
     }
   }
 
-  /// Get total number of books from database or CSV
-  /// Returns the number of books
+  /// Get total number of books in SourcesBooks.csv
+  /// Returns the number of data rows (excluding header)
   Future<int> getTotalBookCount() async {
     try {
-      // Try reading from database first
-      final dbProvider = SqliteDataProvider.instance;
-      if (await dbProvider.databaseExists() && dbProvider.isInitialized) {
-        try {
-          final stats = await dbProvider.getDatabaseStats();
-          final bookCount = stats['books'] ?? 0;
-          if (bookCount > 0) {
-            debugPrint('Book count from DB: $bookCount');
-            return bookCount;
-          }
-        } catch (e) {
-          debugPrint('Error reading book count from DB: $e');
-          // Fall through to CSV reading
-        }
-      }
-
-      // Fallback to CSV reading
       final libraryPath = Settings.getValue(SettingsRepository.keyLibraryPath);
       if (libraryPath == null || libraryPath.isEmpty) {
         debugPrint('Library path not set');
@@ -224,7 +164,7 @@ class DataCollectionService {
 
       return bookCount;
     } catch (e) {
-      debugPrint('Error counting books: $e');
+      debugPrint('Error counting books in SourcesBooks.csv: $e');
       return 0;
     }
   }

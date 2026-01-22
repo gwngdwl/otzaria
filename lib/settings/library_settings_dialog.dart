@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/settings/settings_bloc.dart';
 import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/settings/settings_state.dart';
-import 'package:otzaria/widgets/dialogs.dart';
+import 'package:otzaria/widgets/generic_settings_dialog.dart';
 
 /// פונקציה גלובלית להצגת דיאלוג הגדרות ספרייה
 /// ניתן לקרוא לה מכל מקום באפליקציה

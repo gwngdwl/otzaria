@@ -1,4 +1,4 @@
-import 'package:otzaria/data/data_providers/library_provider_manager.dart';
+import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
 //import 'package:pdfrx/pdfrx.dart';
@@ -16,6 +16,9 @@ abstract class Book {
 
   /// Additional titles of the book, if available.
   final List<String>? extraTitles;
+
+  /// an access to the data layer
+  final FileSystemData data = FileSystemData.instance;
 
   /// The author of the book, if available.
   String? author;
@@ -55,27 +58,19 @@ abstract class Book {
 
   String topics;
 
-  String? filePath;
-
-  String? fileType;
-
-  String? categoryPath;
-
-  /// Whether this book was added by the user (true) or is part of the library (false).
-  final bool isUserBook;
-
   Map<String, dynamic> toJson();
 
   factory Book.fromJson(Map<String, dynamic> json) {
     switch (json['type']) {
       case 'TextBook':
-        return TextBook.fromJson(json);
+        return TextBook(title: json['title']);
       case 'PdfBook':
-        return PdfBook.fromJson(json);
-      case 'DocxBook':
-        return DocxBook.fromJson(json);
-      case 'ExternalLibraryBook':
-        return ExternalLibraryBook.fromJson(json);
+        return PdfBook(
+          title: json['title'],
+          path: json['path'],
+        );
+      case 'OtzarBook':
+        return ExternalBook.fromJson(json);
       default:
         throw Exception('Unknown book type: ${json['type']}');
     }
@@ -100,11 +95,7 @@ abstract class Book {
       this.pubPlace,
       this.order = 999,
       this.topics = '',
-      this.filePath,
-      this.fileType,
-      this.categoryPath,
-      this.extraTitles,
-      this.isUserBook = false});
+      this.extraTitles});
 }
 
 ///a representation of a text book (opposite PDF book).
@@ -127,37 +118,21 @@ class TextBook extends Book {
       super.pubPlace,
       super.order = 999,
       super.topics,
-      super.filePath,
-      super.fileType = 'txt',
-      super.categoryPath,
-      super.extraTitles,
-      super.isUserBook});
+      super.extraTitles});
 
   /// Retrieves the table of contents of the book.
   ///
   /// Returns a [Future] that resolves to a [List] of [TocEntry] objects representing
   /// the table of contents of the book.
-  Future<List<TocEntry>> get tableOfContents async {
-    final toc = await LibraryProviderManager.instance.getBookToc(title, categoryPath ?? '', fileType ?? 'txt');
-    return toc ?? [];
-  }
+  Future<List<TocEntry>> get tableOfContents => data.getBookToc(title);
 
   /// Retrieves all the links for the book.
   ///
   /// Returns a [Future] that resolves to a [List] of [Link] objects.
-  Future<List<Link>> get links async {
-    final provider = LibraryProviderManager.instance.getProviderForBook(title, categoryPath ?? '', fileType ?? 'txt');
-    if (provider != null) {
-      return await provider.getAllLinksForBook(title, categoryPath ?? '', fileType ?? 'txt');
-    }
-    return [];
-  }
+  Future<List<Link>> get links => data.getAllLinksForBook(title);
 
   /// The text data of the book.
-  Future<String> get text async {
-    final bookText = await LibraryProviderManager.instance.getBookText(title, categoryPath ?? '', fileType ?? 'txt');
-    return bookText ?? '';
-  }
+  Future<String> get text async => (await data.getBookText(title));
 
   /// Creates a new `Book` instance from a JSON object.
   ///
@@ -165,11 +140,6 @@ class TextBook extends Book {
   factory TextBook.fromJson(Map<String, dynamic> json) {
     return TextBook(
       title: json['title'],
-      filePath: json['filePath'],
-      categoryPath: json['categoryPath'],
-      fileType: json['fileType'],
-      heCategories: json['heCategories'],
-      isUserBook: json['isUserBook'] ?? false,
     );
   }
 
@@ -181,228 +151,8 @@ class TextBook extends Book {
     return {
       'title': title,
       'type': 'TextBook',
-      'filePath': filePath,
-      'fileType': fileType,
-      'categoryPath': categoryPath,
-      'heCategories': heCategories,
-      'isUserBook': isUserBook,
     };
   }
-}
-
-/// Represents a book from the Otzar HaChochma digital library.
-///
-/// This class extends the [Book] class and includes additional properties
-/// specific to Otzar HaChochma books, such as the Otzar ID and online link.
-class ExternalLibraryBook extends Book {
-  /// The unique identifier for the book in the Otzar HaChochma system.
-  final int id;
-
-  /// The online link to access the book in the Otzar HaChochma system.
-  final String link;
-
-  /// Creates an [ExternalLibraryBook] instance.
-  ///
-  /// [title] and [id] are required. Other parameters are optional.
-  /// [link] is required for online access to the book.
-  ExternalLibraryBook({
-    required super.title,
-    required this.id,
-    super.author,
-    super.heCategories,
-    super.heEra,
-    super.compDateStringHe,
-    super.compPlaceStringHe,
-    super.pubDateStringHe,
-    super.pubPlaceStringHe,
-    super.pubPlace,
-    super.pubDate,
-    super.topics,
-    super.heShortDesc,
-    super.heDesc,
-    required this.link,
-    super.categoryPath,
-    super.fileType = 'link',
-    super.isUserBook
-  });
-
-  /// Returns the publication date of the book.
-  ///
-
-  /// Creates an [ExternalLibraryBook] instance from a JSON map.
-  ///
-  /// This factory constructor is used to deserialize OtzarBook objects.
-  factory ExternalLibraryBook.fromJson(Map<String, dynamic> json) {
-    return ExternalLibraryBook(
-      title: json['bookName'] ?? json['title'],
-      id: json['id'] ?? json['otzarId'],
-      author: json['author'],
-      pubPlace: json['pubPlace'],
-      pubDate: json['pubDate'],
-      topics: json['topics'] ?? '',
-      categoryPath: json['categoryPath'],
-      link: json['link'],
-      heCategories: json['heCategories'],
-      isUserBook: json['isUserBook'] ?? false,
-    );
-  }
-
-  /// Converts the [ExternalLibraryBook] instance to a JSON map.
-  ///
-  /// This method is used to serialize OtzarBook objects.
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'type': 'ExternalLibraryBook',
-      'otzarId': id,
-      'author': author,
-      'pubPlace': pubPlace,
-      'pubDate': pubDate,
-      'topics': topics,
-      'link': link,
-      'filePath': filePath,
-      'categoryPath': categoryPath,
-      'fileType': fileType,
-      'heCategories': heCategories,
-      'isUserBook': isUserBook,
-    };
-  }
-}
-
-/// Abstract class for books that are based on a file in the file system.
-abstract class FileBook extends Book {
-  final String path;
-
-  FileBook({
-    required super.title,
-    required this.path,
-    super.category,
-    super.topics,
-    super.author,
-    super.heCategories,
-    super.heEra,
-    super.compDateStringHe,
-    super.compPlaceStringHe,
-    super.pubDateStringHe,
-    super.pubPlaceStringHe,
-    super.heShortDesc,
-    super.heDesc,
-    super.pubDate,
-    super.pubPlace,
-    super.categoryPath,
-    super.filePath,
-    super.fileType,
-    super.order = 999,
-    super.isUserBook,
-  });
-}
-
-///represents a PDF format book, which is always a file on the device, and there for the [String] fiels 'path'
-///is required
-class PdfBook extends FileBook {
-  PdfBook(
-      {required super.title,
-      super.category,
-      required super.path,
-      super.topics,
-      super.author,
-      super.heCategories,
-      super.heEra,
-      super.compDateStringHe,
-      super.compPlaceStringHe,
-      super.pubDateStringHe,
-      super.pubPlaceStringHe,
-      super.heShortDesc,
-      super.heDesc,
-      super.pubDate,
-      super.pubPlace,
-      super.filePath,
-      super.categoryPath,
-      super.fileType = 'pdf',
-      super.order = 999,
-      super.isUserBook});
-
-  factory PdfBook.fromJson(Map<String, dynamic> json) {
-    return PdfBook(
-      title: json['title'],
-      path: json['path'],
-      categoryPath: json['categoryPath'],
-      filePath: json['filePath'],
-      heCategories: json['heCategories'],
-      isUserBook: json['isUserBook'] ?? false,
-    );
-  }
-
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'path': path,
-      'type': 'PdfBook',
-      'filePath': filePath,
-      'categoryPath': categoryPath,
-      'fileType': fileType,
-      'heCategories': heCategories,
-      'isUserBook': isUserBook,
-    };
-  }
-
-  @override
-  String toString() => 'pdfBook(title: $title, path: $path)';
-}
-
-/// Represents a DOCX format book.
-class DocxBook extends FileBook {
-  DocxBook(
-      {required super.title,
-      super.category,
-      required super.path,
-      super.topics,
-      super.author,
-      super.heCategories,
-      super.heEra,
-      super.compDateStringHe,
-      super.compPlaceStringHe,
-      super.pubDateStringHe,
-      super.pubPlaceStringHe,
-      super.heShortDesc,
-      super.heDesc,
-      super.pubDate,
-      super.pubPlace,
-      super.filePath,
-      super.categoryPath,
-      super.fileType = 'docx',
-      super.order = 999,
-      super.isUserBook});
-
-  factory DocxBook.fromJson(Map<String, dynamic> json) {
-    return DocxBook(
-      title: json['title'],
-      path: json['path'],
-      filePath: json['filePath'],
-      categoryPath: json['categoryPath'],
-      heCategories: json['heCategories'],
-      isUserBook: json['isUserBook'] ?? false,
-    );
-  }
-
-  @override
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'path': path,
-      'type': 'DocxBook',
-      'filePath': filePath,
-      'fileType': fileType,
-      'categoryPath': categoryPath,
-      'heCategories': heCategories,
-      'isUserBook': isUserBook,
-    };
-  }
-
-  @override
-  String toString() => 'DocxBook(title: $title, path: $path)';
 }
 
 ///represents an entry in table of content , which is a node in a hirarchial tree of topics.
@@ -432,4 +182,111 @@ class TocEntry {
     this.level = 1,
     this.parent,
   });
+}
+
+/// Represents a book from the Otzar HaChochma digital library.
+///
+/// This class extends the [Book] class and includes additional properties
+/// specific to Otzar HaChochma books, such as the Otzar ID and online link.
+class ExternalBook extends Book {
+  /// The unique identifier for the book in the Otzar HaChochma system.
+  final int id;
+
+  /// The online link to access the book in the Otzar HaChochma system.
+  final String link;
+
+  /// Creates an [ExternalBook] instance.
+  ///
+  /// [title] and [id] are required. Other parameters are optional.
+  /// [link] is required for online access to the book.
+  ExternalBook({
+    required super.title,
+    required this.id,
+    super.author,
+    super.heCategories,
+    super.heEra,
+    super.compDateStringHe,
+    super.compPlaceStringHe,
+    super.pubDateStringHe,
+    super.pubPlaceStringHe,
+    super.pubPlace,
+    super.pubDate,
+    super.topics,
+    super.heShortDesc,
+    super.heDesc,
+    required this.link,
+  });
+
+  /// Returns the publication date of the book.
+  ///
+
+  /// Creates an [ExternalBook] instance from a JSON map.
+  ///
+  /// This factory constructor is used to deserialize OtzarBook objects.
+  factory ExternalBook.fromJson(Map<String, dynamic> json) {
+    return ExternalBook(
+      title: json['bookName'],
+      id: json['id'],
+      author: json['author'],
+      pubPlace: json['pubPlace'],
+      pubDate: json['pubDate'],
+      topics: json['topics'],
+      link: json['link'],
+    );
+  }
+
+  /// Converts the [ExternalBook] instance to a JSON map.
+  ///
+  /// This method is used to serialize OtzarBook objects.
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'type': 'ExternalBook',
+      'otzarId': id,
+      'author': author,
+      'pubPlace': pubPlace,
+      'pubDate': pubDate,
+      'topics': topics,
+      'link': link,
+    };
+  }
+}
+
+///represents a PDF format book, which is always a file on the device, and there for the [String] fiels 'path'
+///is required
+class PdfBook extends Book {
+  final String path;
+  PdfBook(
+      {required super.title,
+      super.category,
+      required this.path,
+      super.topics,
+      super.author,
+      super.heCategories,
+      super.heEra,
+      super.compDateStringHe,
+      super.compPlaceStringHe,
+      super.pubDateStringHe,
+      super.pubPlaceStringHe,
+      super.heShortDesc,
+      super.heDesc,
+      super.pubDate,
+      super.pubPlace,
+      super.order = 999});
+
+  factory PdfBook.fromJson(Map<String, dynamic> json) {
+    return PdfBook(
+      title: json['title'],
+      path: json['path'],
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {'title': title, 'path': path, 'type': 'PdfBook'};
+  }
+
+  @override
+  String toString() => 'pdfBook(title: $title, path: $path)';
 }

@@ -44,6 +44,11 @@ class AppPaths {
     return p.join(await getLibraryPath(), 'index');
   }
 
+  /// Gets the reference index path (library_path/ref_index)
+  static Future<String> getRefIndexPath() async {
+    return p.join(await getLibraryPath(), 'ref_index');
+  }
+
   /// Gets the manifest file path (library_path/files_manifest.json)
   static Future<String> getManifestPath() async {
     return p.join(await getLibraryPath(), 'files_manifest.json');
@@ -74,12 +79,13 @@ class AppPaths {
     // תיקיית הספרייה תיווצר רק כשמורידים ספרייה או כשהמשתמש בוחר תיקייה קיימת
     final libraryPath = await getLibraryPath();
     final libraryDir = Directory(libraryPath);
-
+    
     // אם תיקיית הספרייה לא קיימת, לא ניצור אותה
     // רק נוודא שתיקיות האינדקס קיימות אם תיקיית הספרייה קיימת
     if (await libraryDir.exists()) {
       final dirs = [
         await getIndexPath(),
+        await getRefIndexPath(),
       ];
 
       for (final dirPath in dirs) {

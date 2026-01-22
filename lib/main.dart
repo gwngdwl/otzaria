@@ -42,7 +42,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/app_bloc_observer.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/migration/file_to_db_migrator.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -57,12 +56,8 @@ import 'package:otzaria/shamor_zachor/services/dynamic_data_loader_service.dart'
 import 'package:otzaria/utils/toc_parser.dart';
 import 'package:otzaria/settings/backup_service.dart';
 import 'package:otzaria/services/sources_books_service.dart';
-import 'package:otzaria/data/cache/books_cache.dart';
-import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/services/notification_service.dart';
-import 'package:logging/logging.dart';
-import 'package:otzaria/widgets/restart_widget.dart';
 
 // Global reference to window listener for cleanup
 AppWindowListener? _appWindowListener;
@@ -80,7 +75,6 @@ DynamicDataLoaderService? _shamorZachorDataLoader;
 /// 2. Calls [initialize] to set up required services and configurations
 /// 3. Launches the main application widget
 void main() async {
-  hierarchicalLoggingEnabled = true;
   // write errors to file
   FlutterError.onError = (FlutterErrorDetails details) {
     if (kDebugMode) {
@@ -123,17 +117,6 @@ void main() async {
   // Initialize bloc observer for debugging
   Bloc.observer = AppBlocObserver();
 
-  // Configure logging level for debug mode
-  if (kDebugMode) {
-    Logger.root.level = Level.ALL;
-    // Silence verbose logs from flutter_widget_from_html
-    Logger('fwfh').level = Level.INFO;
-    Logger.root.onRecord.listen((record) {
-      debugPrint(
-          '${record.level.name}: ${record.loggerName}: ${record.message}');
-    });
-  }
-
   // Remove legacy debug log setup
 
   await initialize();
@@ -143,72 +126,70 @@ void main() async {
   final historyRepository = HistoryRepository();
 
   runApp(
-    RestartWidget(
-      child: MultiRepositoryProvider(
+    MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<FocusRepository>(
+          create: (context) => FocusRepository(),
+        ),
+      ],
+      child: MultiBlocProvider(
         providers: [
-          RepositoryProvider<FocusRepository>(
-            create: (context) => FocusRepository(),
+          BlocProvider<SettingsBloc>(
+            create: (context) => SettingsBloc(
+              repository: SettingsRepository(),
+            )..add(LoadSettings()),
+          ),
+          BlocProvider<LibraryBloc>(
+            create: (context) => LibraryBloc()..add(LoadLibrary()),
+          ),
+          BlocProvider<IndexingBloc>(
+            create: (context) => IndexingBloc.create(),
+          ),
+          BlocProvider<HistoryBloc>(
+              create: (context) => HistoryBloc(historyRepository)),
+          BlocProvider<TabsBloc>(
+            create: (context) => TabsBloc(
+              repository: TabsRepository(),
+            )..add(LoadTabs()),
+          ),
+          BlocProvider<NavigationBloc>(
+            create: (context) => NavigationBloc(
+              repository: NavigationRepository(),
+              tabsRepository: TabsRepository(),
+            )..add(const CheckLibrary()),
+          ),
+          BlocProvider<FindRefBloc>(
+              create: (context) => FindRefBloc(
+                  findRefRepository: FindRefRepository(
+                      dataRepository: DataRepository.instance))),
+          BlocProvider<PersonalNotesBloc>(
+            create: (context) => PersonalNotesBloc(),
+          ),
+          BlocProvider<BookmarkBloc>(
+            create: (context) => BookmarkBloc(BookmarkRepository()),
+          ),
+          BlocProvider<WorkspaceBloc>(
+            create: (context) => WorkspaceBloc(
+              repository: WorkspaceRepository(),
+              tabsBloc: context.read<TabsBloc>(),
+            )..add(LoadWorkspaces()),
+          ),
+          ChangeNotifierProvider<ShamorZachorDataProvider>(
+            lazy: true, // Create only when needed
+            create: (context) {
+              // Create provider based on current state of loader
+              final provider = _shamorZachorDataLoader != null
+                  ? ShamorZachorDataProvider.dynamic(_shamorZachorDataLoader!)
+                  : ShamorZachorDataProvider(); // Start with legacy
+
+              return provider;
+            },
+          ),
+          ChangeNotifierProvider<ShamorZachorProgressProvider>(
+            create: (context) => ShamorZachorProgressProvider(),
           ),
         ],
-        child: MultiBlocProvider(
-          providers: [
-            BlocProvider<SettingsBloc>(
-              create: (context) => SettingsBloc(
-                repository: SettingsRepository(),
-              )..add(LoadSettings()),
-            ),
-            BlocProvider<LibraryBloc>(
-              create: (context) => LibraryBloc()..add(LoadLibrary()),
-            ),
-            BlocProvider<IndexingBloc>(
-              create: (context) => IndexingBloc.create(),
-            ),
-            BlocProvider<HistoryBloc>(
-                create: (context) => HistoryBloc(historyRepository)),
-            BlocProvider<TabsBloc>(
-              create: (context) => TabsBloc(
-                repository: TabsRepository(),
-              )..add(LoadTabs()),
-            ),
-            BlocProvider<NavigationBloc>(
-              create: (context) => NavigationBloc(
-                repository: NavigationRepository(),
-                tabsRepository: TabsRepository(),
-              )..add(const CheckLibrary()),
-            ),
-            BlocProvider<FindRefBloc>(
-                create: (context) => FindRefBloc(
-                    findRefRepository: FindRefRepository(
-                        dataRepository: DataRepository.instance))),
-            BlocProvider<PersonalNotesBloc>(
-              create: (context) => PersonalNotesBloc(),
-            ),
-            BlocProvider<BookmarkBloc>(
-              create: (context) => BookmarkBloc(BookmarkRepository()),
-            ),
-            BlocProvider<WorkspaceBloc>(
-              create: (context) => WorkspaceBloc(
-                repository: WorkspaceRepository(),
-                tabsBloc: context.read<TabsBloc>(),
-              )..add(LoadWorkspaces()),
-            ),
-            ChangeNotifierProvider<ShamorZachorDataProvider>(
-              lazy: true, // Create only when needed
-              create: (context) {
-                // Create provider based on current state of loader
-                final provider = _shamorZachorDataLoader != null
-                    ? ShamorZachorDataProvider.dynamic(_shamorZachorDataLoader!)
-                    : ShamorZachorDataProvider(); // Start with legacy
-
-                return provider;
-              },
-            ),
-            ChangeNotifierProvider<ShamorZachorProgressProvider>(
-              create: (context) => ShamorZachorProgressProvider(),
-            ),
-          ],
-          child: const App(),
-        ),
+        child: const App(),
       ),
     ),
   );
@@ -240,8 +221,6 @@ Future<void> initialize() async {
     _appWindowListener = AppWindowListener();
     windowManager.addListener(_appWindowListener!);
 
-    await windowManager.setPreventClose(true);
-
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await WindowPersistence.restoreIfAny();
       await windowManager.show();
@@ -254,27 +233,9 @@ Future<void> initialize() async {
   await initHive();
   await createDirs();
   await loadCerts();
-
-  // Initialize SQLite Database Provider
-  await SqliteDataProvider.instance.initialize();
-
+  
   // Migrate personal notes from file storage to SQLite database
   await FileToDbMigrator.runMigration();
-
-  // If the migration created the DB file on a first run, initialize again.
-  await SqliteDataProvider.instance.initialize();
-
-  // Warm up shared in-memory caches for books and acronyms.
-  // BooksCache is shared between library screen and FindRef.
-  // AcronymsCache is used exclusively by FindRef.
-  try {
-    await BooksCache.instance.warmUp();
-    await AcronymsCache.instance.warmUp();
-  } catch (e) {
-    if (kDebugMode) {
-      debugPrint('Failed to warm up book/acronym caches: $e');
-    }
-  }
 
   // נדרש לטעינת PDF דרך pdfrx: הגדרת תקיית cache
   try {
@@ -354,10 +315,6 @@ void createDirectoryIfNotExists(String path) {
 
 initHive() async {
   Hive.defaultDirectory = (await getApplicationSupportDirectory()).path;
-  Hive.box(name: 'tabs');
-  Hive.box(name: 'workspaces');
-  Hive.box(name: 'history');
-  Hive.box(name: 'bookmarks');
 }
 
 Future<void> loadCerts() async {
@@ -375,10 +332,6 @@ void cleanup() {
 
   // Clear SourcesBooks data from memory
   SourcesBooksService().clearData();
-
-  // Clear shared book/acronym caches
-  BooksCache.instance.clear();
-  AcronymsCache.instance.clear();
 }
 
 // Note: TOC parsing helper moved to lib/utils/toc_parser.dart for reuse

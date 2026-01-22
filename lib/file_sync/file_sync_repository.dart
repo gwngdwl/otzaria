@@ -12,18 +12,10 @@ class FileSyncRepository {
   int _currentProgress = 0;
   int _totalFiles = 0;
 
-  /// Callback to delete a book from the database when it's removed from GitHub
-  Future<bool> Function(String filePath)? onDeleteBookFromDb;
-
-  /// Callback to sync new files to the database after GitHub sync completes
-  Future<void> Function()? onSyncCompleted;
-
   FileSyncRepository({
     required this.githubOwner,
     required this.repositoryName,
     this.branch = 'main',
-    this.onDeleteBookFromDb,
-    this.onSyncCompleted,
   });
 
   int get currentProgress => _currentProgress;
@@ -330,16 +322,6 @@ class FileSyncRepository {
         await file.delete();
       }
 
-      // Delete from database if it's a book file (TXT)
-      if (filePath.endsWith('.txt')) {
-        try {
-          await onDeleteBookFromDb?.call(localFilePath);
-        } catch (e) {
-          developer.log('Error deleting book from DB: $localFilePath',
-              name: 'FileSyncRepository', error: e);
-        }
-      }
-
       //if successful, remove from manifest
       Map<String, dynamic> localManifest = await _getLocalManifest();
 
@@ -490,19 +472,6 @@ class FileSyncRepository {
     }
 
     isSyncing = false;
-
-    // Trigger database sync to add new files to DB
-    if (count > 0) {
-      try {
-        developer.log('Triggering database sync for new files...',
-            name: 'FileSyncRepository');
-        await onSyncCompleted?.call();
-      } catch (e) {
-        developer.log('Error during database sync after GitHub sync',
-            name: 'FileSyncRepository', error: e);
-      }
-    }
-
     return count;
   }
 

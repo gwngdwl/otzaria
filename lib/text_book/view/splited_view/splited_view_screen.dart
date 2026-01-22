@@ -16,6 +16,7 @@ import 'package:otzaria/settings/settings_event.dart';
 import 'package:otzaria/widgets/commentary_pane_tooltip.dart';
 import 'package:otzaria/widgets/resizable_drag_handle.dart';
 import 'package:otzaria/utils/context_menu_utils.dart';
+import 'package:otzaria/utils/text_manipulation.dart' as utils;
 
 class SplitedViewScreen extends StatefulWidget {
   const SplitedViewScreen({
@@ -53,8 +54,7 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   int? _currentTabIndex;
   late double _leftPaneWidth;
   bool _isHovering = false; // מצב ריחוף על הטאב
-  final ValueNotifier<String?> _savedSelectedText =
-      ValueNotifier<String?>(null); // טקסט נבחר לתפריט הקשר
+  String? _savedSelectedText; // טקסט נבחר לתפריט הקשר
 
   @override
   void initState() {
@@ -162,11 +162,12 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
     if (state.visibleIndices.isEmpty) return false;
 
     final visibleIndicesSet = state.visibleIndices.toSet();
-    // בדיקה אם יש קישורים מסוג מפרשים לאינדקסים הנראים
+    // בדיקה אם יש מפרשים פעילים לאינדקסים הנראים
     return state.links.any((link) =>
         visibleIndicesSet.contains(link.index1 - 1) &&
         (link.connectionType == "commentary" ||
-            link.connectionType == "targum"));
+            link.connectionType == "targum") &&
+        state.activeCommentators.contains(utils.getTitleFromPath(link.path2)));
   }
 
   void _openPane() {
@@ -180,20 +181,20 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   @override
   void dispose() {
     _controller.dispose();
-    _savedSelectedText.dispose();
     super.dispose();
   }
 
-  ContextMenu _buildContextMenu(TextBookLoaded state, String? selectedText) {
+  ContextMenu _buildContextMenu(TextBookLoaded state) {
     return ContextMenu(
       entries: [
         MenuItem(
           label: const Text('העתק'),
           icon: const Icon(FluentIcons.copy_24_regular),
-          enabled: selectedText != null && selectedText.trim().isNotEmpty,
+          enabled: _savedSelectedText != null &&
+              _savedSelectedText!.trim().isNotEmpty,
           onSelected: (_) => ContextMenuUtils.copyFormattedText(
             context: context,
-            savedSelectedText: selectedText,
+            savedSelectedText: _savedSelectedText,
             fontSize: state.fontSize,
           ),
         ),
@@ -285,8 +286,8 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                   if (_paneOpen)
                     SizedBox(
                       width: _leftPaneWidth,
-                      child: ValueListenableBuilder<String?>(
-                        valueListenable: _savedSelectedText,
+                      child: ContextMenuRegion(
+                        contextMenu: _buildContextMenu(state),
                         child: SelectionArea(
                           key: _selectionKey,
                           contextMenuBuilder: (context, selectableRegionState) {
@@ -296,7 +297,9 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                           onSelectionChanged: (selection) {
                             if (selection != null &&
                                 selection.plainText.isNotEmpty) {
-                              _savedSelectedText.value = selection.plainText;
+                              setState(() {
+                                _savedSelectedText = selection.plainText;
+                              });
                             }
                           },
                           child: TabbedCommentaryPanel(
@@ -323,12 +326,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
                             },
                           ),
                         ),
-                        builder: (context, selectedText, child) {
-                          return ContextMenuRegion(
-                            contextMenu: _buildContextMenu(state, selectedText),
-                            child: child!,
-                          );
-                        },
                       ),
                     ),
                 ],

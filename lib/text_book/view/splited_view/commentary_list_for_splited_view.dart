@@ -12,7 +12,6 @@ import 'package:otzaria/settings/settings_state.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
-import 'package:flutter/foundation.dart';
 
 class CommentaryList extends StatefulWidget {
   final Function(TextBookTab) openBookCallback;
@@ -36,11 +35,12 @@ class CommentaryList extends StatefulWidget {
 
 class _CommentaryListState extends State<CommentaryList> {
   final TextEditingController _searchController = TextEditingController();
-  final ValueNotifier<String> _searchQueryNotifier = ValueNotifier<String>('');
-
+  String _searchQuery = '';
+  late Future<List<Link>> thisLinks;
+  late List<int> indexes;
   final ScrollOffsetController scrollController = ScrollOffsetController();
-  final ValueNotifier<int> _currentSearchIndexNotifier = ValueNotifier<int>(0);
-  final ValueNotifier<int> _totalSearchResultsNotifier = ValueNotifier<int>(0);
+  int _currentSearchIndex = 0;
+  int _totalSearchResults = 0;
   final Map<int, int> _searchResultsPerItem = {};
 
   int _getItemSearchIndex(int itemIndex) {
@@ -52,7 +52,7 @@ class _CommentaryListState extends State<CommentaryList> {
     final itemResults = _searchResultsPerItem[itemIndex] ?? 0;
     if (itemResults == 0) return -1;
 
-    final relativeIndex = _currentSearchIndexNotifier.value - cumulativeIndex;
+    final relativeIndex = _currentSearchIndex - cumulativeIndex;
     return (relativeIndex >= 0 && relativeIndex < itemResults)
         ? relativeIndex
         : -1;
@@ -61,14 +61,11 @@ class _CommentaryListState extends State<CommentaryList> {
   @override
   void dispose() {
     _searchController.dispose();
-    _searchQueryNotifier.dispose();
-    _currentSearchIndexNotifier.dispose();
-    _totalSearchResultsNotifier.dispose();
     super.dispose();
   }
 
   void _scrollToSearchResult() {
-    if (_totalSearchResultsNotifier.value == 0) return;
+    if (_totalSearchResults == 0) return;
 
     // מחשבים באיזה פריט נמצאת התוצאה הנוכחית
     int cumulativeIndex = 0;
@@ -76,7 +73,7 @@ class _CommentaryListState extends State<CommentaryList> {
 
     for (int i = 0; i < _searchResultsPerItem.length; i++) {
       final itemResults = _searchResultsPerItem[i] ?? 0;
-      if (_currentSearchIndexNotifier.value < cumulativeIndex + itemResults) {
+      if (_currentSearchIndex < cumulativeIndex + itemResults) {
         targetItemIndex = i;
         break;
       }
@@ -96,35 +93,23 @@ class _CommentaryListState extends State<CommentaryList> {
 
   void _updateSearchResultsCount(int itemIndex, int count) {
     if (mounted) {
-      _searchResultsPerItem[itemIndex] = count;
-      _totalSearchResultsNotifier.value =
-          _searchResultsPerItem.values.fold(0, (sum, count) => sum + count);
-      if (_currentSearchIndexNotifier.value >=
-              _totalSearchResultsNotifier.value &&
-          _totalSearchResultsNotifier.value > 0) {
-        _currentSearchIndexNotifier.value =
-            _totalSearchResultsNotifier.value - 1;
-      }
+      setState(() {
+        _searchResultsPerItem[itemIndex] = count;
+        _totalSearchResults =
+            _searchResultsPerItem.values.fold(0, (sum, count) => sum + count);
+        if (_currentSearchIndex >= _totalSearchResults &&
+            _totalSearchResults > 0) {
+          _currentSearchIndex = _totalSearchResults - 1;
+        }
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<TextBookBloc, TextBookState>(
-        buildWhen: (previous, current) {
-      if (previous is! TextBookLoaded || current is! TextBookLoaded) {
-        return true;
-      }
-      return !listEquals(
-              previous.activeCommentators, current.activeCommentators) ||
-          previous.links != current.links ||
-          !listEquals(previous.visibleIndices, current.visibleIndices) ||
-          previous.selectedIndex != current.selectedIndex ||
-          previous.fontSize != current.fontSize ||
-          previous.removeNikud != current.removeNikud;
-    }, builder: (context, state) {
+    return BlocBuilder<TextBookBloc, TextBookState>(builder: (context, state) {
       if (state is! TextBookLoaded) return const Center();
-      final currentIndexes = state.selectedIndex != null
+      final indexes = state.selectedIndex != null
           ? [state.selectedIndex!]
           : state.visibleIndices;
 
@@ -135,107 +120,90 @@ class _CommentaryListState extends State<CommentaryList> {
             child: Row(
               children: [
                 Expanded(
-                  child: ValueListenableBuilder<String>(
-                    valueListenable: _searchQueryNotifier,
-                    builder: (context, query, _) {
-                      return ValueListenableBuilder<int>(
-                        valueListenable: _totalSearchResultsNotifier,
-                        builder: (context, total, __) {
-                          return ValueListenableBuilder<int>(
-                            valueListenable: _currentSearchIndexNotifier,
-                            builder: (context, currentIndex, ___) {
-                              return RtlTextField(
-                                controller: _searchController,
-                                decoration: InputDecoration(
-                                  hintText: 'חפש בתוך המפרשים המוצגים...',
-                                  prefixIcon:
-                                      const Icon(FluentIcons.search_24_regular),
-                                  suffixIcon: query.isNotEmpty
-                                      ? Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (total > 1) ...[
-                                              Text(
-                                                '${currentIndex + 1}/$total',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              IconButton(
-                                                icon: const Icon(FluentIcons
-                                                    .chevron_up_24_regular),
-                                                iconSize: 20,
-                                                padding: EdgeInsets.zero,
-                                                constraints:
-                                                    const BoxConstraints(
-                                                  minWidth: 24,
-                                                  minHeight: 24,
-                                                ),
-                                                onPressed: currentIndex > 0
-                                                    ? () {
-                                                        _currentSearchIndexNotifier
-                                                                .value =
-                                                            currentIndex - 1;
-                                                        _scrollToSearchResult();
-                                                      }
-                                                    : null,
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(FluentIcons
-                                                    .chevron_down_24_regular),
-                                                iconSize: 20,
-                                                padding: EdgeInsets.zero,
-                                                constraints:
-                                                    const BoxConstraints(
-                                                  minWidth: 24,
-                                                  minHeight: 24,
-                                                ),
-                                                onPressed: currentIndex <
-                                                        total - 1
-                                                    ? () {
-                                                        _currentSearchIndexNotifier
-                                                                .value =
-                                                            currentIndex + 1;
-                                                        _scrollToSearchResult();
-                                                      }
-                                                    : null,
-                                              ),
-                                            ],
-                                            IconButton(
-                                              icon: const Icon(FluentIcons
-                                                  .dismiss_24_regular),
-                                              onPressed: () {
-                                                _searchController.clear();
-                                                _searchQueryNotifier.value = '';
-                                                _currentSearchIndexNotifier
-                                                    .value = 0;
-                                                _totalSearchResultsNotifier
-                                                    .value = 0;
-                                                _searchResultsPerItem.clear();
-                                              },
-                                            ),
-                                          ],
-                                        )
-                                      : null,
-                                  isDense: true,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8.0),
+                  child: RtlTextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'חפש בתוך המפרשים המוצגים...',
+                      prefixIcon: const Icon(FluentIcons.search_24_regular),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_totalSearchResults > 1) ...[
+                                  Text(
+                                    '${_currentSearchIndex + 1}/$_totalSearchResults',
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
                                   ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    icon: const Icon(
+                                        FluentIcons.chevron_up_24_regular),
+                                    iconSize: 20,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 24,
+                                      minHeight: 24,
+                                    ),
+                                    onPressed: _currentSearchIndex > 0
+                                        ? () {
+                                            setState(() {
+                                              _currentSearchIndex--;
+                                            });
+                                            _scrollToSearchResult();
+                                          }
+                                        : null,
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                        FluentIcons.chevron_down_24_regular),
+                                    iconSize: 20,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 24,
+                                      minHeight: 24,
+                                    ),
+                                    onPressed: _currentSearchIndex <
+                                            _totalSearchResults - 1
+                                        ? () {
+                                            setState(() {
+                                              _currentSearchIndex++;
+                                            });
+                                            _scrollToSearchResult();
+                                          }
+                                        : null,
+                                  ),
+                                ],
+                                IconButton(
+                                  icon: const Icon(
+                                      FluentIcons.dismiss_24_regular),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {
+                                      _searchQuery = '';
+                                      _currentSearchIndex = 0;
+                                      _totalSearchResults = 0;
+                                      _searchResultsPerItem.clear();
+                                    });
+                                  },
                                 ),
-                                onChanged: (value) {
-                                  if (_searchQueryNotifier.value != value) {
-                                    _searchQueryNotifier.value = value;
-                                    _currentSearchIndexNotifier.value = 0;
-                                    _totalSearchResultsNotifier.value = 0;
-                                    _searchResultsPerItem.clear();
-                                  }
-                                },
-                              );
-                            },
-                          );
-                        },
-                      );
+                              ],
+                            )
+                          : null,
+                      isDense: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                        _currentSearchIndex = 0;
+                        if (value.isEmpty) {
+                          _totalSearchResults = 0;
+                          _searchResultsPerItem.clear();
+                        }
+                      });
                     },
                   ),
                 ),
@@ -272,7 +240,7 @@ class _CommentaryListState extends State<CommentaryList> {
           Expanded(
             child: FutureBuilder(
               future: getLinksforIndexs(
-                  indexes: currentIndexes,
+                  indexes: indexes,
                   links: state.links,
                   commentatorsToShow: state.activeCommentators),
               builder: (context, thisLinksSnapshot) {
@@ -284,7 +252,7 @@ class _CommentaryListState extends State<CommentaryList> {
                 }
 
                 // יצירת מפתח ייחודי לאינדקסים הנוכחיים
-                final indexesKey = currentIndexes.join(',');
+                final indexesKey = indexes.join(',');
 
                 return ProgressiveScroll(
                   scrollController: scrollController,
@@ -309,26 +277,17 @@ class _CommentaryListState extends State<CommentaryList> {
                           return Text(displayTitle);
                         },
                       ),
-                      subtitle: AnimatedBuilder(
-                        animation: Listenable.merge([
-                          _searchQueryNotifier,
-                          _currentSearchIndexNotifier,
-                          _totalSearchResultsNotifier,
-                        ]),
-                        builder: (context, _) {
-                          return CommentaryContent(
-                            key: ValueKey(
-                                '${thisLinksSnapshot.data![index1].path2}_${thisLinksSnapshot.data![index1].index2}_$indexesKey'),
-                            link: thisLinksSnapshot.data![index1],
-                            fontSize: widget.fontSize,
-                            openBookCallback: widget.openBookCallback,
-                            removeNikud: state.removeNikud,
-                            searchQuery: _searchQueryNotifier.value,
-                            currentSearchIndex: _getItemSearchIndex(index1),
-                            onSearchResultsCountChanged: (count) =>
-                                _updateSearchResultsCount(index1, count),
-                          );
-                        },
+                      subtitle: CommentaryContent(
+                        key: ValueKey(
+                            '${thisLinksSnapshot.data![index1].path2}_${thisLinksSnapshot.data![index1].index2}_$indexesKey'),
+                        link: thisLinksSnapshot.data![index1],
+                        fontSize: widget.fontSize,
+                        openBookCallback: widget.openBookCallback,
+                        removeNikud: state.removeNikud,
+                        searchQuery: _searchQuery, // העברת החיפוש
+                        currentSearchIndex: _getItemSearchIndex(index1),
+                        onSearchResultsCountChanged: (count) =>
+                            _updateSearchResultsCount(index1, count),
                       ),
                     ),
                   ),

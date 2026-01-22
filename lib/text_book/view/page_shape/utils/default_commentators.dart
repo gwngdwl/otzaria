@@ -1,112 +1,29 @@
 import 'dart:convert';
-import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/models/links.dart';
-import 'package:otzaria/utils/text_manipulation.dart' as utils;
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 
 /// מחלקה לניהול ברירות מחדל של מפרשים לפי סוג הספר
 /// ההגדרות נטענות מקובץ JSON חיצוני
 class DefaultCommentators {
-  // Cache לקובץ ה-JSON
-  static Map<String, dynamic>? _configCache;
-
   /// מחזיר מפרשי ברירת מחדל לפי קטגוריית הספר
-  /// מקבל גם את רשימת הקישורים כדי למצוא את השמות המלאים של המפרשים
-  static Future<Map<String, String?>> getDefaults(TextBook book,
-      {List<Link>? links}) async {
+  static Future<Map<String, String?>> getDefaults(TextBook book) async {
     final config = await _loadConfig();
-
+    
     // קבלת נתיב הספר
-    final titleToPath = await FileSystemData.instance.titleToPath;
-    var bookPath = titleToPath[book.title] ?? '';
-
-    // נסיון לקבלת נתיב מתוך אובייקט הספר (עבור ספרים ממסד הנתונים)
-    if (bookPath.isEmpty) {
-      bookPath = book.category?.path ?? book.categoryPath ?? '';
-    }
-
-    // קבלת שמות המפרשים מה-JSON
-    final defaults = _getDefaultsFromConfig(config, book.title, bookPath);
-
-    // אם יש links, נחפש את השמות המלאים של המפרשים
-    if (links != null && links.isNotEmpty) {
-      return _resolveCommentatorNames(defaults, links);
-    }
-
-    return defaults;
-  }
-
-  /// מחפש את השמות המלאים של המפרשים מתוך רשימת הקישורים
-  static Map<String, String?> _resolveCommentatorNames(
-      Map<String, String?> defaults, List<Link> links) {
-    // קבלת רשימת שמות המפרשים הזמינים
-    final availableLinks = links.where((link) =>
-        link.connectionType == 'commentary' || link.connectionType == 'targum');
-
-    final availableCommentators = availableLinks
-        .map((link) => utils.getTitleFromPath(link.path2))
-        .toSet()
-        .toList();
-
-    return {
-      'right':
-          _findMatchingCommentator(defaults['right'], availableCommentators),
-      'left': _findMatchingCommentator(defaults['left'], availableCommentators),
-      'bottom':
-          _findMatchingCommentator(defaults['bottom'], availableCommentators),
-      'bottomRight': _findMatchingCommentator(
-          defaults['bottomRight'], availableCommentators),
-    };
-  }
-
-  /// מחפש מפרש שמתאים לשם הנתון
-  /// מחזיר את השם המלא אם נמצא, או null אם לא
-  static String? _findMatchingCommentator(
-      String? shortName, List<String> available) {
-    if (shortName == null) return null;
-
-    // 1. התאמה מדויקת
-    String? match = available.firstWhereOrNull((name) => name == shortName);
-    if (match != null) {
-      return match;
-    }
-
-    // 2. התאמה של התחלה
-    match = available.firstWhereOrNull((name) => name.startsWith(shortName));
-    if (match != null) {
-      return match;
-    }
-
-    // 3. התאמה של הכלה
-    match = available.firstWhereOrNull((name) => name.contains(shortName));
-    if (match != null) {
-      return match;
-    }
-
-    // 4. התאמה הפוכה - אם השם בהגדרות הוא נתיב מלא והשם הזמין הוא רק הכותרת
-    // נבדוק אם השם בהגדרות מכיל את השם הזמין
-    match = available.firstWhereOrNull((name) => shortName.contains(name));
-    if (match != null) {
-      return match;
-    }
-
-    return null;
+    final titleToPath = await book.data.titleToPath;
+    final bookPath = titleToPath[book.title] ?? '';
+    
+    return _getDefaultsFromConfig(config, book.title, bookPath);
   }
 
   static Future<Map<String, dynamic>> _loadConfig() async {
-    // שימוש ב-cache אם כבר נטען
-    if (_configCache != null) {
-      return _configCache!;
-    }
-
     try {
       final jsonString =
           await rootBundle.loadString('assets/default_commentators.json');
-      _configCache = json.decode(jsonString) as Map<String, dynamic>;
-      return _configCache!;
-    } catch (e) {
+      return json.decode(jsonString) as Map<String, dynamic>;
+    } catch (e, s) {
+      debugPrint('Failed to load default commentators config: $e\n$s');
       return {
         'categories': [],
         'default': {
@@ -134,7 +51,8 @@ class DefaultCommentators {
     return _parseCommentators(defaultConfig, bookTitle);
   }
 
-  static bool _matchesCategory(String bookPath, Map<String, dynamic> category) {
+  static bool _matchesCategory(
+      String bookPath, Map<String, dynamic> category) {
     // pathContains - כל המחרוזות חייבות להיות בנתיב (AND)
     if (category.containsKey('pathContains')) {
       final pathContains = category['pathContains'] as List<dynamic>;

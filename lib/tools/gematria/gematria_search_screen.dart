@@ -139,15 +139,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
       // קבלת נתיב הספרייה מההגדרות
       final libraryPath = Settings.getValue<String>(SettingsRepository.keyLibraryPath) ?? '.';
 
-      // Define book titles to search based on settings
-      List<String>? bookTitlesToSearch;
-      if (torahOnly) {
-        bookTitlesToSearch = _tanachOrder.take(5).toList(); // Torah only
-      } else {
-        bookTitlesToSearch = _tanachOrder; // All Tanach
-      }
-
-      // חיפוש בתיקיות ספציפיות בלבד (for fallback file search)
+      // חיפוש בתיקיות ספציפיות בלבד
       final searchPaths = torahOnly
           ? ['$libraryPath/אוצריא/תנך/תורה']
           : [
@@ -157,46 +149,28 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
             ];
 
       final List<SearchResult> allResults = [];
-
-      // Try database search first with book titles
-      final searchResults = await GimatriaSearch.searchInFiles(
-        searchPaths.first, // folder parameter (used for fallback)
-        targetGimatria,
-        maxPhraseWords: 8,
-        fileLimit: maxResults + 1, // מבקשים אחד יותר כדי לדעת אם יש עוד
-        wholeVerseOnly: wholeVerseOnly,
-        gematriaMethod: gematriaMethod,
-        useWithKolel: useWithKolel,
-        bookTitles: bookTitlesToSearch,
-      );
-      allResults.addAll(searchResults);
-
-      // If database search didn't work, try other paths (fallback)
-      if (allResults.isEmpty && searchPaths.length > 1) {
-        for (int i = 1; i < searchPaths.length; i++) {
-          final path = searchPaths[i];
-          final moreResults = await GimatriaSearch.searchInFiles(
-            path,
-            targetGimatria,
-            maxPhraseWords: 8,
-            fileLimit: maxResults + 1,
-            wholeVerseOnly: wholeVerseOnly,
-            gematriaMethod: gematriaMethod,
-            useWithKolel: useWithKolel,
-          );
-          allResults.addAll(moreResults);
-          if (allResults.length > maxResults) break;
-        }
+      for (final path in searchPaths) {
+        final results = await GimatriaSearch.searchInFiles(
+          path,
+          targetGimatria,
+          maxPhraseWords: 8,
+          fileLimit: maxResults + 1, // מבקשים אחד יותר כדי לדעת אם יש עוד
+          wholeVerseOnly: wholeVerseOnly,
+          gematriaMethod: gematriaMethod,
+          useWithKolel: useWithKolel,
+        );
+        allResults.addAll(results);
+        if (allResults.length > maxResults) break;
       }
 
       // בדיקה אם יש יותר תוצאות מהמקסימום
       _hasMoreResults = allResults.length > maxResults;
-      var finalResults = allResults.take(maxResults).toList();
+      var results = allResults.take(maxResults).toList();
 
       // סינון כפילויות אם נדרש
       if (filterDuplicates) {
         final seen = <String>{};
-        finalResults = finalResults.where((result) {
+        results = results.where((result) {
           // הסרת ניקוד וטעמים לפני השוואה
           final key = utils.removeVolwels(result.text);
           if (seen.contains(key)) {
@@ -209,7 +183,7 @@ class GematriaSearchScreenState extends State<GematriaSearchScreen> {
 
       // המרת התוצאות לפורמט של המסך
       setState(() {
-        _searchResults = finalResults.map((result) {
+        _searchResults = results.map((result) {
           // חילוץ שם הקובץ
           final relativePath =
               result.file.replaceFirst(libraryPath, '').replaceAll('\\', '/');

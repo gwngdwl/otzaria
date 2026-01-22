@@ -2,13 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
-import 'package:otzaria/widgets/data_source_indicator.dart';
-import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/services/sources_books_service.dart';
 import 'package:otzaria/text_book/view/book_source_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math';
-import 'package:otzaria/data/book_locator.dart';
 
 class HeaderItem extends StatelessWidget {
   final Category category;
@@ -106,14 +103,12 @@ class BookGridItem extends StatelessWidget {
   final bool showTopics;
   final Book book;
   final VoidCallback onBookClickCallback;
-  final VoidCallback? onBookDeleted;
 
   const BookGridItem({
     super.key,
     required this.book,
     required this.onBookClickCallback,
     this.showTopics = false,
-    this.onBookDeleted,
   });
 
   @override
@@ -131,7 +126,7 @@ class BookGridItem extends StatelessWidget {
             alignment: Alignment.topRight,
             child: Row(
               children: [
-                (book is PdfBook || book.fileType == 'pdf')
+                book is PdfBook
                     ? Padding(
                         padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
                         child: Icon(FluentIcons.document_pdf_24_regular,
@@ -140,11 +135,11 @@ class BookGridItem extends StatelessWidget {
                                 .secondary
                                 .withValues(alpha: 0.6)),
                       )
-                    : book is ExternalLibraryBook
+                    : book is ExternalBook
                         ? Padding(
                             padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
                             child: Image.asset(
-                              (book as ExternalLibraryBook)
+                              (book as ExternalBook)
                                       .link
                                       .toString()
                                       .contains('tablet.otzar.org')
@@ -155,25 +150,14 @@ class BookGridItem extends StatelessWidget {
                               fit: BoxFit.contain,
                             ),
                           )
-                        : book.fileType == 'docx'
-                            ? Padding(
-                                padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
-                                child: Icon(
-                                    FluentIcons.document_one_page_24_regular,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .secondary
-                                        .withValues(alpha: 0.6)),
-                              )
-                            : Padding(
-                                padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
-                                child: Icon(
-                                    FluentIcons.document_text_24_regular,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .secondary
-                                        .withValues(alpha: 0.6)),
-                              ),
+                        : Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
+                            child: Icon(FluentIcons.document_text_24_regular,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .secondary
+                                    .withValues(alpha: 0.6)),
+                          ),
                 Expanded(
                   child: ListTile(
                     mouseCursor: SystemMouseCursors.click,
@@ -208,18 +192,6 @@ class BookGridItem extends StatelessWidget {
                         style: const TextStyle(fontSize: 13)),
                   ),
                 ),
-                // Data source indicator (DB or File)
-                book is TextBook
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                        child: DataSourceIndicatorAsync(
-                          sourceFuture: FileSystemData.instance
-                              .getBookDataSource(
-                                  book.title, book.categoryPath, book.fileType),
-                          size: 18.0,
-                        ),
-                      )
-                    : const SizedBox.shrink(),
                 book.heShortDesc == null || book.heShortDesc == ''
                     ? const SizedBox.shrink()
                     : Tooltip(
@@ -250,39 +222,6 @@ class BookGridItem extends StatelessWidget {
                               .withValues(alpha: 0.6),
                         ),
                       ),
-                // כפתור תפריט אפשרויות (3 נקודות)
-                book is! ExternalLibraryBook
-                    ? PopupMenuButton<String>(
-                        icon: Icon(
-                          FluentIcons.more_vertical_24_regular,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .secondary
-                              .withValues(alpha: 0.6),
-                        ),
-                        tooltip: 'אפשרויות',
-                        position: PopupMenuPosition.under,
-                        onSelected: (value) {
-                          if (value == 'delete') {
-                            _showDeleteBookDialog(context, book, onBookDeleted);
-                          }
-                        },
-                        itemBuilder: (BuildContext context) => [
-                          const PopupMenuItem<String>(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(FluentIcons.delete_24_regular,
-                                    color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('מחק ספר זה',
-                                    style: TextStyle(color: Colors.red)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                    : const SizedBox.shrink(),
               ],
             ),
           ),
@@ -665,74 +604,4 @@ void _showCategoryInfoDialog(BuildContext context, Category category) {
       );
     },
   );
-}
-
-/// הצגת דיאלוג אישור למחיקת ספר
-void _showDeleteBookDialog(
-    BuildContext context, Book book, VoidCallback? onBookDeleted) {
-  showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: const Text(
-          'מחיקת ספר',
-          textAlign: TextAlign.right,
-        ),
-        content: Text(
-          'האם אתה בטוח שאתה רוצה למחוק את הספר "${book.title}"?\nלא ניתן לשחזר פעולה זו!',
-          textAlign: TextAlign.right,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ביטול'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _deleteBook(context, book);
-              onBookDeleted?.call();
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
-            child: const Text('כן, אני רוצה למחוק'),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-/// מחיקת ספר - מ-DB או מהקובץ
-Future<void> _deleteBook(BuildContext context, Book book) async {
-  try {
-    // שימוש ב-BookLocator למחיקת הספר
-    final success = await BookLocator.deleteBook(
-      book.title,
-      category: book.category,
-    );
-
-    if (!success) {
-      throw Exception('המחיקה נכשלה');
-    }
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('הספר "${book.title}" נמחק בהצלחה'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }
-  } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('שגיאה במחיקת הספר: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 }

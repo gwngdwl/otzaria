@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
-import '../migration/dao/daos/database.dart';
 import 'package:otzaria/core/window_persistence.dart';
 
 /// Callback type for fullscreen state changes
@@ -28,14 +27,13 @@ class AppWindowListener extends WindowListener {
   }
 
   @override
-  void onWindowClose() async {
+  void onWindowClose() {
     if (kDebugMode) {
       print('Window close requested');
     }
 
     try {
       // Perform cleanup operations here if needed
-      await MyDatabase().close();
 
       // Close the window properly
       if (!kIsWeb &&
@@ -58,14 +56,14 @@ class AppWindowListener extends WindowListener {
   @override
   void onWindowFocus() {
     if (kDebugMode) {
-      //print('Window focused');
+      print('Window focused');
     }
   }
 
   @override
   void onWindowBlur() {
     if (kDebugMode) {
-      //print('Window blurred');
+      print('Window blurred');
     }
   }
 
@@ -119,6 +117,7 @@ class AppWindowListener extends WindowListener {
 
   /// Clean up the listener when disposing
   void dispose() {
+
     // Remove this listener from window manager
     if (!kIsWeb &&
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -126,3 +125,4 @@ class AppWindowListener extends WindowListener {
     }
   }
 }
+

@@ -16,7 +16,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   })  : _repository = repository,
         super(TabsState.initial()) {
     on<LoadTabs>(_onLoadTabs);
-    on<ReplaceAllTabs>(_onReplaceAllTabs);
     on<AddTab>(_onAddTab);
     on<RemoveTab>(_onRemoveTab);
     on<SetCurrentTab>(_onSetCurrentTab);
@@ -56,23 +55,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       tabs: tabs,
       currentTabIndex: currentTabIndex,
       sideBySideMode: validatedMode,
-    ));
-  }
-
-  void _onReplaceAllTabs(ReplaceAllTabs event, Emitter<TabsState> emit) {
-    debugPrint('DEBUG: החלפת כל הטאבים - ${event.tabs.length} טאבים חדשים');
-    
-    // ניקוי משאבים של כל הטאבים הקיימים
-    for (final tab in state.tabs) {
-      tab.dispose();
-    }
-
-    _repository.saveTabs(event.tabs, event.currentTabIndex, null);
-    
-    emit(state.copyWith(
-      tabs: event.tabs,
-      currentTabIndex: event.currentTabIndex,
-      clearSideBySide: true,
     ));
   }
 
@@ -175,6 +157,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   void _onSetCurrentTab(SetCurrentTab event, Emitter<TabsState> emit) {
     if (event.index >= 0 && event.index < state.tabs.length) {
+      debugPrint(
+          'DEBUG: מעבר לטאב ${event.index} - ${state.tabs[event.index].title}');
+
       // לא מבטלים את מצב side-by-side - פשוט עוברים לטאב
       // הפונקציה _shouldShowSideBySideView תחליט אם להציג side-by-side או TabBarView
       _repository.saveTabs(state.tabs, event.index, state.sideBySideMode);
@@ -276,18 +261,20 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   void _onNavigateToNextTab(NavigateToNextTab event, Emitter<TabsState> emit) {
-    if (state.tabs.isEmpty) return;
-    final newIndex = (state.currentTabIndex + 1) % state.tabs.length;
-    _repository.saveTabs(state.tabs, newIndex);
-    emit(state.copyWith(currentTabIndex: newIndex));
+    if (state.currentTabIndex < state.tabs.length - 1) {
+      final newIndex = state.currentTabIndex + 1;
+      _repository.saveTabs(state.tabs, newIndex);
+      emit(state.copyWith(currentTabIndex: newIndex));
+    }
   }
 
   void _onNavigateToPreviousTab(
       NavigateToPreviousTab event, Emitter<TabsState> emit) {
-    if (state.tabs.isEmpty) return;
-    final newIndex = state.currentTabIndex == 0 ? state.tabs.length - 1 : state.currentTabIndex - 1;
-    _repository.saveTabs(state.tabs, newIndex);
-    emit(state.copyWith(currentTabIndex: newIndex));
+    if (state.currentTabIndex > 0) {
+      final newIndex = state.currentTabIndex - 1;
+      _repository.saveTabs(state.tabs, newIndex);
+      emit(state.copyWith(currentTabIndex: newIndex));
+    }
   }
 
   void _onTogglePinTab(TogglePinTab event, Emitter<TabsState> emit) {
@@ -367,6 +354,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   void _onDisableSideBySideMode(
       DisableSideBySideMode event, Emitter<TabsState> emit) {
+    debugPrint('DEBUG: ביטול מצב side-by-side');
 
     // אם הטאב הנוכחי הוא CombinedTab, נפרק אותו לשני טאבים נפרדים
     if (state.currentTab is CombinedTab) {

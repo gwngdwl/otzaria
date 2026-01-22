@@ -51,8 +51,8 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.1
-  bloc: ^9.2.0
-  equatable: ^2.0.8
+  bloc: ^9.0.1
+  equatable: ^2.0.5
   flutter_localizations:
     sdk: flutter
   flutter_settings_screens: ^0.3.4
@@ -62,7 +62,7 @@ dependencies:
   msix: ^3.16.12
   path_provider: ^2.1.5
   html: ^0.15.1
-  pdfrx: ^2.2.24
+  pdfrx: ^2.2.18
   url_launcher: ^6.3.1
   flutter_widget_from_html: ^0.17.0
   scrollable_positioned_list: ^0.3.8
@@ -86,7 +86,7 @@ dependencies:
   filter_list: 1.0.3
   package_info_plus: ^9.0.0
   crypto: ^3.0.7
-  path: ^1.9.1
+  path: ^1.9.0
   http: ^1.4.0
   sqflite: ^2.4.2
   characters: ^1.4.0
@@ -178,9 +178,7 @@ flutter:
     - assets/icon/זכור ושמור.png
     - assets/icon/shamor_zachor_with_v.png
     - assets/icon/iconnew.png
-    - lib/migration/dao/sqflite/
     - assets/dictionary.json
-    - assets/default_commentators.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

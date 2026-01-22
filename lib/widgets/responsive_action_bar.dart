@@ -3,7 +3,7 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 /// רכיב שמציג כפתורי פעולה עם יכולת הסתרה במסכים צרים
 /// כשחלק מהכפתורים נסתרים, מוצג כפתור "..." שפותח תפריט
-///
+/// 
 /// תומך בשני מצבי עבודה:
 /// 1. מצב חדש: `actions` + `alwaysInMenu` - כפתורים נעלמים בסדר ההצגה, ותמיד יש תפריט עם כפתורים קבועים
 /// 2. מצב ישן: `actions` + `originalOrder` - כפתורים נעלמים לפי עדיפות, תפריט רק אם צריך
@@ -45,19 +45,14 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
   @override
   Widget build(BuildContext context) {
     // בדיקה אם יש כפתורים בכלל
-    final hasAlwaysInMenu =
-        widget.alwaysInMenu != null && widget.alwaysInMenu!.isNotEmpty;
-
+    final hasAlwaysInMenu = widget.alwaysInMenu != null && widget.alwaysInMenu!.isNotEmpty;
+    
     if (widget.actions.isEmpty && !hasAlwaysInMenu) {
       return const SizedBox.shrink();
     }
 
     // קביעת מצב העבודה
-    // New mode is only when originalOrder is NOT provided.
-    // If originalOrder is provided, we keep old-mode priority behavior, and
-    // allow alwaysInMenu to populate the overflow menu even on wide screens.
-    final isNewMode =
-        widget.alwaysInMenu != null && widget.originalOrder == null;
+    final isNewMode = widget.alwaysInMenu != null;
 
     if (isNewMode) {
       return _buildNewMode(context);
@@ -155,19 +150,16 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
         visibleActions.map((action) => action.widget).toList();
     final List<Widget> children = [];
 
-    final alwaysInMenu = widget.alwaysInMenu ?? const <ActionButtonData>[];
-    final allHiddenActions = [...hiddenActions, ...alwaysInMenu];
-
     if (widget.overflowOnRight) {
       // מסך הספרייה: תפריט בצד ימין. הסדר החזותי R->L דורש היפוך הרשימה.
       children.addAll(visibleWidgets.reversed);
-      if (allHiddenActions.isNotEmpty) {
-        children.add(_buildOverflowButton(allHiddenActions));
+      if (hiddenActions.isNotEmpty) {
+        children.add(_buildOverflowButton(hiddenActions));
       }
     } else {
       // תפריט בצד שמאל
-      if (allHiddenActions.isNotEmpty) {
-        children.add(_buildOverflowButton(allHiddenActions));
+      if (hiddenActions.isNotEmpty) {
+        children.add(_buildOverflowButton(hiddenActions));
       }
       children.addAll(visibleWidgets);
     }
@@ -181,8 +173,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
 
   Widget _buildOverflowButton(List<ActionButtonData> hiddenActions) {
     // יצירת key ייחודי על סמך הכפתורים הנסתרים כדי למנוע בעיות context
-    final uniqueKey =
-        'overflow_${hiddenActions.map((a) => a.tooltip).join('_')}';
+    final uniqueKey = 'overflow_${hiddenActions.map((a) => a.tooltip).join('_')}';
 
     return Builder(
       key: ValueKey(uniqueKey),
@@ -198,17 +189,14 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
           itemBuilder: (context) {
             return hiddenActions.map((action) {
               // אם יש submenuItems, נבנה תת-תפריט
-              if (action.submenuItems != null &&
-                  action.submenuItems!.isNotEmpty) {
+              if (action.submenuItems != null && action.submenuItems!.isNotEmpty) {
                 return PopupMenuItem<ActionButtonData>(
                   enabled: false,
                   padding: EdgeInsets.zero,
                   child: SubmenuButton(
                     menuChildren: action.submenuItems!.map((subAction) {
                       return MenuItemButton(
-                        leadingIcon: subAction.icon != null
-                            ? Icon(subAction.icon, size: 20)
-                            : null,
+                        leadingIcon: subAction.icon != null ? Icon(subAction.icon, size: 20) : null,
                         onPressed: () {
                           Navigator.of(context).pop(); // סוגר את התפריט הראשי
                           subAction.onPressed?.call();
@@ -217,8 +205,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
                       );
                     }).toList(),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -234,11 +221,10 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
                   ),
                 );
               }
-
+              
               // פריט רגיל ללא submenu
               return PopupMenuItem<ActionButtonData>(
                 value: action,
-                enabled: action.onPressed != null,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:otzaria/models/books.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
@@ -13,9 +12,9 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/utils/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/text_book/editing/repository/overrides_repository.dart';
 import 'package:otzaria/text_book/editing/models/section_identifier.dart';
+
 import 'package:otzaria/search/models/search_configuration.dart';
 
 class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
@@ -23,10 +22,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   final OverridesRepository _overridesRepository;
   final ItemScrollController scrollController;
   final ItemPositionsListener positionsListener;
-
   Timer? _debounceTimer;
-  Timer? _highlightTimer;
-  VoidCallback? _positionListenerCallback;
 
   TextBookBloc({
     required this.repository,
@@ -120,62 +116,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
 
     try {
-      // Check if book is from database - if so, load preview first for instant display
-      final sqliteProvider = SqliteDataProvider.instance;
-      String content = await repository.getBookContent(book);
-      if (content.isEmpty) {
-        // Load quick preview (40 lines) for instant display
-        final preview = await sqliteProvider.getBookQuickPreview(
-          book.title,
-          visibleIndices.first,
-        );
-
-        if (preview != null && preview.isNotEmpty) {
-          debugPrint(
-              '⚡ Showing quick preview, loading full book in background...');
-          content = preview;
-
-          // Load full book in background
-          _loadFullBookInBackground(book, emit, event, visibleIndices,
-              searchText, showLeftPane, commentators);
-        } else {
-          // Preview failed, load full book normally
-          content = await repository.getBookContent(book);
-        }
-      }
-
+      final content = await repository.getBookContent(book);
       final links = await repository.getBookLinks(book);
       final tableOfContents = await repository.getTableOfContents(book);
-
-      // טעינת metadata של הספר אם חסר (למשל כשפותחים מחיפוש)
-      if (book.heCategories == null || book.heCategories!.isEmpty) {
-        final metadata = await FileSystemData.instance.metadata;
-        final bookMetadata = metadata[book.title];
-        if (bookMetadata != null) {
-          book.heCategories = bookMetadata['heCategories'];
-          book.author = bookMetadata['author'];
-          book.heEra = bookMetadata['heEra'];
-        }
-
-        // אם עדיין אין קטגוריות, נחלץ אותן מהנתיב של הספר
-        if (book.heCategories == null || book.heCategories!.isEmpty) {
-          final titleToPath = await FileSystemData.instance.titleToPath;
-          final bookPath = titleToPath[book.title];
-          if (bookPath != null) {
-            // חילוץ הקטגוריות מהנתיב
-            // למשל: /אוצריא/הלכה/משנה תורה/ספר מדע/משנה תורה, הלכות דעות.txt
-            // → הלכה, משנה תורה, ספר מדע
-            final pathParts = bookPath.split(Platform.pathSeparator);
-            final otzariaIndex = pathParts.indexOf('אוצריא');
-            if (otzariaIndex >= 0 && otzariaIndex < pathParts.length - 2) {
-              // לוקחים את כל התיקיות בין אוצריא לקובץ עצמו
-              final categories =
-                  pathParts.sublist(otzariaIndex + 1, pathParts.length - 1);
-              book.heCategories = categories.join(', ');
-            }
-          }
-        }
-      }
 
       // Update current title if we're preserving state
       String? currentTitle;
@@ -192,7 +135,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       final List<String> availableCommentators;
       final Map<String, List<String>> eras;
       if (event.loadCommentators) {
-        availableCommentators = await repository.getAvailableCommentators(book);
+        availableCommentators =
+            await repository.getAvailableCommentators(links);
         eras = await utils.splitByEra(availableCommentators);
       } else {
         availableCommentators = [];
@@ -214,30 +158,22 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       );
 
       // Set up position listener with debouncing to prevent excessive updates
-      // Remove old listener if exists
-      if (_positionListenerCallback != null) {
-        positionsListener.itemPositions
-            .removeListener(_positionListenerCallback!);
-      }
-
-      _positionListenerCallback = () {
+      positionsListener.itemPositions.addListener(() {
         // Cancel previous timer if exists
         _debounceTimer?.cancel();
 
         // Set new timer with 100ms delay
         _debounceTimer = Timer(const Duration(milliseconds: 100), () {
-          if (isClosed) return;
-
-          final visibleIndicesNow = positionsListener.itemPositions.value
-              .map((e) => e.index)
-              .toList();
-          if (visibleIndicesNow.isNotEmpty) {
-            add(UpdateVisibleIndecies(visibleIndicesNow));
+          if (!isClosed) {
+            final visibleIndicesNow = positionsListener.itemPositions.value
+                .map((e) => e.index)
+                .toList();
+            if (visibleIndicesNow.isNotEmpty) {
+              add(UpdateVisibleIndecies(visibleIndicesNow));
+            }
           }
         });
-      };
-
-      positionsListener.itemPositions.addListener(_positionListenerCallback!);
+      });
 
       emit(TextBookLoaded(
         book: book,
@@ -344,6 +280,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
 
+      // אם עוברים לצורת הדף הישנה, ודא שמצב "צורת הדף" החדש לא נשמר כברירת מחדל
+      if (event.show) {
+        Settings.setValue<bool>('key-page-shape-view', false);
+      }
       emit(currentState.copyWith(
         showTzuratHadafView: event.show,
         showPageShapeView: false, // כיבוי התצוגה החדשה
@@ -361,7 +301,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     if (state is TextBookLoaded) {
       final currentState = state as TextBookLoaded;
 
-      // מצב צורת הדף נשמר פר-ספר (ב-toJson של הטאב), לא גלובלית
+      // שמירת מצב "צורת הדף" כדי שישוחזר גם אחרי סגירה/פתיחה של האפליקציה
+      Settings.setValue<bool>('key-page-shape-view', event.show);
       emit(currentState.copyWith(
         showPageShapeView: event.show,
         showTzuratHadafView: false, // כיבוי התצוגה הישנה
@@ -500,10 +441,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final currentState = state as TextBookLoaded;
     emit(currentState.copyWith(highlightedLine: event.lineIndex));
 
-    // Cancel previous highlight timer if exists
-    _highlightTimer?.cancel();
-
-    _highlightTimer = Timer(const Duration(seconds: 2), () {
+    Future.delayed(const Duration(seconds: 2), () {
       if (!isClosed) {
         add(ClearHighlightedLine(event.lineIndex));
       }
@@ -863,60 +801,8 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
   @override
   Future<void> close() {
-    // Cancel all timers
     _debounceTimer?.cancel();
-    _highlightTimer?.cancel();
-
-    // Remove position listener
-    if (_positionListenerCallback != null) {
-      positionsListener.itemPositions
-          .removeListener(_positionListenerCallback!);
-    }
-
     return super.close();
-  }
-
-  /// Loads the full book in the background and updates the state
-  void _loadFullBookInBackground(
-    TextBook book,
-    Emitter<TextBookState> emit,
-    LoadContent event,
-    List<int> visibleIndices,
-    String searchText,
-    bool showLeftPane,
-    List<String> commentators,
-  ) async {
-    try {
-      debugPrint('📚 Loading full book in background...');
-
-      // Load full content
-      final fullContent = await repository.getBookContent(book);
-
-      // Check if still in the same book (user might have navigated away)
-      if (isClosed || state is! TextBookLoaded) {
-        debugPrint('⚠️ Bloc closed or state changed, aborting background load');
-        return;
-      }
-
-      final currentState = state as TextBookLoaded;
-      if (currentState.book.title != book.title) {
-        debugPrint(
-            '⚠️ User navigated to different book, aborting background load');
-        return;
-      }
-
-      debugPrint('✅ Full book loaded, updating state...');
-
-      // Update state with full content
-      emit(currentState.copyWith(
-        content: fullContent.split('\n'),
-      ));
-
-      debugPrint('✅ State updated with full book content');
-    } catch (e) {
-      debugPrint('❌ Error loading full book in background: $e');
-      // Don't emit error - user already has preview
-    }
   }
 
   List<CommentatorGroup> _buildCommentatorGroups(

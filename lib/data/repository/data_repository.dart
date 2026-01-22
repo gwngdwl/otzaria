@@ -27,7 +27,7 @@ class DataRepository {
   late Future<Library> library;
 
   late Future<List<Book>> hebrewBooks;
-  late Future<List<ExternalLibraryBook>> otzarBooks;
+  late Future<List<ExternalBook>> otzarBooks;
 
   DataRepository() {
     library = _getLibrary();
@@ -45,9 +45,9 @@ class DataRepository {
 
   /// Retrieves the list of books from the Otzar HaHochma project
   ///
-  /// Returns a [Future] that completes with a list of [ExternalLibraryBook] objects
+  /// Returns a [Future] that completes with a list of [ExternalBook] objects
   /// representing books from the Otzar HaHochma collection
-  Future<List<ExternalLibraryBook>> getOtzarBooks() {
+  Future<List<ExternalBook>> getOtzarBooks() {
     return FileSystemData.getOtzarBooks();
   }
 
@@ -65,8 +65,8 @@ class DataRepository {
   ///   - [title]: The title of the book to retrieve
   ///
   /// Returns a [Future] that completes with the book's text content as a [String]
-  Future<String> getBookText(String title, {String? category, String? fileType}) async {
-    return _fileSystemData.getBookText(title, category: category, fileType: fileType);
+  Future<String> getBookText(String title) async {
+    return _fileSystemData.getBookText(title);
   }
 
   /// Retrieves the table of contents for a specific book
@@ -76,8 +76,8 @@ class DataRepository {
   ///
   /// Returns a [Future] that completes with a list of [TocEntry] objects
   /// representing the book's table of contents structure
-  Future<List<TocEntry>> getBookToc(String title, {String? category, String? fileType}) async {
-    return _fileSystemData.getBookToc(title, category: category, fileType: fileType);
+  Future<List<TocEntry>> getBookToc(String title) async {
+    return _fileSystemData.getBookToc(title);
   }
 
   /// Searches for references by relevance to a given reference string
