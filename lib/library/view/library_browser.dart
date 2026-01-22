@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -26,14 +25,9 @@ import 'package:otzaria/library/view/book_preview_panel.dart';
 import 'package:otzaria/library/view/resizable_preview_panel.dart';
 import 'package:otzaria/widgets/responsive_action_bar.dart';
 import 'package:otzaria/utils/open_book.dart';
-import 'package:otzaria/ui/database_generation_dialog.dart';
-import 'package:otzaria/core/app_paths.dart';
-import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
-import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
-import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/widgets/rtl_text_field.dart';
 
 class LibraryBrowser extends StatefulWidget {
@@ -51,9 +45,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   int _depth = 0;
   final Set<String> _expandedCategories = {}; // קטגוריות שנפתחו בתצוגת רשימה
 
-  // Database generation button visibility
-  bool?
-      _showDbGenerationButton; // null = לא נבדק עדיין, true = הצג, false = אל תציג
   // FileSyncBloc יווצר פעם אחת בלבד
   late final FileSyncBloc _fileSyncBloc;
 
@@ -62,96 +53,14 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     super.initState();
     context.read<LibraryBloc>().add(LoadLibrary());
 
-    // בדיקה אסינכרונית אם להציג כפתור יצירת DB (ברקע, לא חוסם)
-    _checkDbGenerationButtonVisibility();
     // יצירת FileSyncBloc פעם אחת בלבד
     _fileSyncBloc = FileSyncBloc(
       repository: FileSyncRepository(
         githubOwner: "Y-PLONI",
         repositoryName: "otzaria-library",
         branch: "main",
-        // Callback to delete book from DB when removed from GitHub
-        onDeleteBookFromDb: _deleteBookFromDb,
-        // Callback to sync new files to DB after GitHub sync completes
-        onSyncCompleted: _syncFilesToDb,
       ),
     );
-  }
-
-  /// בדיקה אסינכרונית אם להציג כפתור יצירת DB
-  /// הבדיקה מתבצעת ברקע ולא חוסמת את עליית התוכנה
-  ///
-  /// לוגיקה:
-  /// - במצב דיבאגר (debug/profile): הכפתור תמיד מוצג
-  /// - במצב פרודקשן (release): הכפתור מוצג רק אם קובץ DB לא קיים
-  /// - עד לסיום הבדיקה: הכפתור לא מוצג (_showDbGenerationButton = null)
-  Future<void> _checkDbGenerationButtonVisibility() async {
-    // במצב דיבאגר - תמיד הצג את הכפתור חיווי אם חסר
-    // const bool.fromEnvironment('dart.vm.product') מחזיר false בדיבאגר, true בפרודקשן
-    if (const bool.fromEnvironment('dart.vm.product') == false) {
-      // בדוק אם DB קיים גם בדיבאג כדי לדעת אם להבהב או לא
-    }
-
-    try {
-      // בדיקה אם קובץ DB קיים
-      final libraryPath = await AppPaths.getLibraryPath();
-      final dbPath = DatabaseConstants.getDatabasePathForLibrary(libraryPath);
-      final dbFile = File(dbPath);
-      final dbExists = await dbFile.exists();
-
-      if (mounted) {
-        setState(() {
-          // הצג חיווי מהבהב ר אם DB לא קיים
-          _showDbGenerationButton = !dbExists;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error checking DB file existence: $e');
-      // במקרה של שגיאה - נניח שה-DB קיים כדי לא לבלבל
-      if (mounted) {
-        setState(() {
-          _showDbGenerationButton = false;
-        });
-      }
-    }
-  }
-
-  /// Delete a book from the database when it's removed from GitHub
-  Future<bool> _deleteBookFromDb(String filePath) async {
-    try {
-      final repository = SqliteDataProvider.instance.repository;
-      if (repository == null) return false;
-
-      final syncService = await FileSyncService.getInstance(repository);
-      if (syncService == null) return false;
-
-      return await syncService.deleteBookByFilePath(filePath);
-    } catch (e) {
-      debugPrint('Error deleting book from DB: $e');
-      return false;
-    }
-  }
-
-  /// Sync new files to the database after GitHub sync completes
-  Future<void> _syncFilesToDb() async {
-    try {
-      final repository = SqliteDataProvider.instance.repository;
-      if (repository == null) return;
-
-      final syncService = await FileSyncService.getInstance(repository);
-      if (syncService == null) return;
-
-      final result = await syncService.syncFiles();
-      debugPrint(
-          '📚 DB sync after GitHub: ${result.addedBooks} added, ${result.updatedBooks} updated');
-
-      // Refresh the library to show new books
-      if (mounted && (result.addedBooks > 0 || result.updatedBooks > 0)) {
-        context.read<LibraryBloc>().add(RefreshLibrary());
-      }
-    } catch (e) {
-      debugPrint('Error syncing files to DB: $e');
-    }
   }
 
   @override
@@ -588,7 +497,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   Widget _buildBookItem(Book book, {bool showTopics = false}) {
-    if (book is ExternalLibraryBook) {
+    if (book is ExternalBook) {
       return BookGridItem(
         book: book,
         onBookClickCallback: () => _openOtzarBook(book),
@@ -633,10 +542,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   final index = book is PdfBook ? 1 : 0;
                   _openBookInReader(book, index);
                 }
-              },
-              onBookDeleted: () {
-                // רענון הספרייה לאחר מחיקת ספר
-                context.read<LibraryBloc>().add(RefreshLibrary());
               },
             ),
           ),
@@ -755,7 +660,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   /// פריט ספר בתצוגת רשימה
   Widget _buildListBookItem(Book book, int level) {
-    if (book is ExternalLibraryBook) {
+    if (book is ExternalBook) {
       return _buildExternalBookListItem(book, level);
     }
 
@@ -847,7 +752,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
   }
 
   /// פריט ספר חיצוני בתצוגת רשימה
-  Widget _buildExternalBookListItem(ExternalLibraryBook book, int level) {
+  Widget _buildExternalBookListItem(ExternalBook book, int level) {
     return InkWell(
       onTap: () => _openOtzarBook(book),
       child: Container(
@@ -918,7 +823,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     _refocusSearchBar();
   }
 
-  void _openOtzarBook(ExternalLibraryBook book) {
+  void _openOtzarBook(ExternalBook book) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1002,19 +907,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
     SettingsState settingsState,
   ) {
     final actions = <ActionButtonData>[];
-
-    // DB exists indicator goes into the overflow menu.
-    if (!(Platform.isAndroid || Platform.isIOS) &&
-        _showDbGenerationButton == false) {
-      actions.add(
-        ActionButtonData(
-          widget: const SizedBox.shrink(),
-          icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: 'מסד נתונים כבר קיים',
-          onPressed: null,
-        ),
-      );
-    }
 
     return actions;
   }
@@ -1125,18 +1017,6 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           _refocusSearchBar(selectAll: true);
         },
       ),
-
-      // יצירת מסד נתונים - אם אין DB: בחוץ. אם יש: עובר לתפריט "...".
-      if (!(Platform.isAndroid || Platform.isIOS) &&
-          _showDbGenerationButton == true)
-        ActionButtonData(
-          widget: _BlinkingDatabaseButton(
-            onPressed: () => showDatabaseGenerationDialog(context),
-          ),
-          icon: FluentIcons.database_arrow_right_24_regular,
-          tooltip: 'יצירת מסד נתונים',
-          onPressed: () => showDatabaseGenerationDialog(context),
-        ),
 
       // סינכרון - מוצג רק אם מצב אופליין לא מופעל
       if (!settingsState.isOfflineMode) _buildSyncActionButton(),

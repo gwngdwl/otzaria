@@ -915,7 +915,8 @@ class CalendarWidget extends StatelessWidget {
             children: [
               Text(
                 '$dayOfWeek $jewishDateStr',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(
@@ -1731,31 +1732,45 @@ class CalendarWidget extends StatelessWidget {
                             return;
                           }
 
-                          final int? recurringYears;
-                          if (isRecurring && !recurForever) {
-                            recurringYears =
-                                int.tryParse(yearsController.text.trim());
-                          } else {
-                            recurringYears = null;
-                          }
-
                           if (isEditMode) {
+                            // Determine recurrence type
+                            RecurrenceType recurrenceType;
+                            if (!isRecurring) {
+                              recurrenceType = RecurrenceType.none;
+                            } else if (useHebrewCalendar) {
+                              recurrenceType = RecurrenceType.annualHebrew;
+                            } else {
+                              recurrenceType = RecurrenceType.annualGregorian;
+                            }
+
                             final updatedEvent = existingEvent.copyWith(
                               title: titleController.text.trim(),
                               description: descriptionController.text.trim(),
-                              recurring: isRecurring,
-                              recurOnHebrew: useHebrewCalendar,
-                              recurringYears: recurringYears,
+                              recurrenceType: recurrenceType,
+                              recurringYears: recurForever
+                                  ? null
+                                  : int.tryParse(yearsController.text),
                             );
                             cubit.updateEvent(updatedEvent);
                           } else {
+                            // Determine recurrence type
+                            RecurrenceType recurrenceType;
+                            if (!isRecurring) {
+                              recurrenceType = RecurrenceType.none;
+                            } else if (useHebrewCalendar) {
+                              recurrenceType = RecurrenceType.annualHebrew;
+                            } else {
+                              recurrenceType = RecurrenceType.annualGregorian;
+                            }
+
                             cubit.addEvent(
                               title: titleController.text.trim(),
                               description: descriptionController.text.trim(),
                               baseGregorianDate: displayedGregorianDate,
-                              isRecurring: isRecurring,
-                              recurOnHebrew: useHebrewCalendar,
-                              recurringYears: recurringYears,
+                              recurrenceType: recurrenceType,
+                              recurringYears: recurForever
+                                  ? null
+                                  : int.tryParse(yearsController.text),
                             );
                           }
                           Navigator.of(dialogContext).pop();
@@ -1904,21 +1919,39 @@ class CalendarWidget extends StatelessWidget {
                     }
 
                     if (isEditMode) {
+                      // Determine recurrence type
+                      RecurrenceType recurrenceType;
+                      if (!isRecurring) {
+                        recurrenceType = RecurrenceType.none;
+                      } else if (useHebrewCalendar) {
+                        recurrenceType = RecurrenceType.annualHebrew;
+                      } else {
+                        recurrenceType = RecurrenceType.annualGregorian;
+                      }
+
                       final updatedEvent = existingEvent.copyWith(
                         title: titleController.text.trim(),
                         description: descriptionController.text.trim(),
-                        recurring: isRecurring,
-                        recurOnHebrew: useHebrewCalendar,
+                        recurrenceType: recurrenceType,
                         recurringYears: recurringYears,
                       );
                       cubit.updateEvent(updatedEvent);
                     } else {
+                      // Determine recurrence type
+                      RecurrenceType recurrenceType;
+                      if (!isRecurring) {
+                        recurrenceType = RecurrenceType.none;
+                      } else if (useHebrewCalendar) {
+                        recurrenceType = RecurrenceType.annualHebrew;
+                      } else {
+                        recurrenceType = RecurrenceType.annualGregorian;
+                      }
+
                       cubit.addEvent(
                         title: titleController.text.trim(),
                         description: descriptionController.text.trim(),
                         baseGregorianDate: displayedGregorianDate,
-                        isRecurring: isRecurring,
-                        recurOnHebrew: useHebrewCalendar,
+                        recurrenceType: recurrenceType,
                         recurringYears: recurringYears,
                       );
                     }

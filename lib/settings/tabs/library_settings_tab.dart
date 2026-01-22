@@ -12,7 +12,6 @@ import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
-import 'package:otzaria/settings/custom_folders/custom_folders_tile.dart';
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatelessWidget {
@@ -156,16 +155,7 @@ class LibrarySettingsTab extends StatelessWidget {
               ],
 
               // תיקיות מותאמות אישית (רק בדסקטופ)
-              if (!(Platform.isAndroid || Platform.isIOS)) ...[
-                const SizedBox(height: 16),
-                _buildSectionCard(
-                  context: context,
-                  title: 'תיקיות מותאמות אישית',
-                  children: const [
-                    CustomFoldersTile(),
-                  ],
-                ),
-              ],
+              if (!(Platform.isAndroid || Platform.isIOS)) ...[],
             ],
           ),
         );

@@ -178,4 +178,14 @@ class NotificationService {
     if (!_isInitialized) return;
     await flutterLocalNotificationsPlugin.cancelAll();
   }
+
+  Future<bool> checkPermissions() async {
+    // Stub method - always return false since database functionality removed
+    return false;
+  }
+
+  Future<void> cancelNotification(int id) async {
+    if (!_isInitialized) return;
+    await flutterLocalNotificationsPlugin.cancel(id);
+  }
 }

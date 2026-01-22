@@ -454,4 +454,17 @@ class SettingsRepository {
     // Mark as initialized
     await _settings.setValue('settings_initialized', true);
   }
+
+  // Stub methods for removed database functionality
+  Future<void> updateCalendarZmanAlertsJson(String json) async {
+    // Stub - do nothing
+  }
+
+  String getCalendarEventNotificationIdsJson() {
+    return '[]';
+  }
+
+  Future<void> updateCalendarEventNotificationIdsJson(String json) async {
+    // Stub - do nothing
+  }
 }
