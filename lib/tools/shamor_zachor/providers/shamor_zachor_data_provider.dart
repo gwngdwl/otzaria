@@ -43,12 +43,13 @@ class ShamorZachorDataProvider with ChangeNotifier {
   /// Constructor accepting SqliteDataProvider
   ShamorZachorDataProvider({
     SqliteDataProvider? sqliteDataProvider,
-  }) : _sqliteDataProvider = sqliteDataProvider ?? SqliteDataProvider.instance {
-    _loadInitialData();
-  }
+  }) : _sqliteDataProvider = sqliteDataProvider ?? SqliteDataProvider.instance;
 
-  Future<void> _loadInitialData() async {
-    await loadAllData();
+  /// Ensures data is loaded - call this when the widget is first displayed
+  Future<void> ensureLoaded() async {
+    if (!_isLoading && !hasData && _error == null) {
+      await loadAllData();
+    }
   }
 
   Future<void> loadAllData() async {
@@ -430,7 +431,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
   }
 
   // Other methods (retry, clearError, etc)
-  void retry() => _loadInitialData();
+  void retry() => loadAllData();
   void clearError() {
     _error = null;
     notifyListeners();
