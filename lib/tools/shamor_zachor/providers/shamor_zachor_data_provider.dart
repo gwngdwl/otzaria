@@ -41,11 +41,17 @@ class ShamorZachorDataProvider with ChangeNotifier {
   bool get hasData => _allBookData.isNotEmpty;
 
   /// Constructor accepting SqliteDataProvider
+  ///
+  /// NOTE: Data is NOT loaded automatically in the constructor to avoid
+  /// slowing down app startup. Call ensureLoaded() when the widget is displayed.
   ShamorZachorDataProvider({
     SqliteDataProvider? sqliteDataProvider,
   }) : _sqliteDataProvider = sqliteDataProvider ?? SqliteDataProvider.instance;
 
   /// Ensures data is loaded - call this when the widget is first displayed
+  ///
+  /// This method is idempotent - it will only load data once.
+  /// Subsequent calls will be ignored if data is already loaded or loading.
   Future<void> ensureLoaded() async {
     if (!_isLoading && !hasData && _error == null) {
       await loadAllData();
