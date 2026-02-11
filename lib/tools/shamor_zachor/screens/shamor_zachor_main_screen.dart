@@ -39,8 +39,13 @@ class _ShamorZachorMainScreenState extends State<ShamorZachorMainScreen>
     super.initState();
     _logger.info('Initialized ShamorZachorMainScreen (Split View)');
 
+    // Ensure data is loaded when screen is first displayed
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _notifyTitleChange();
+      if (mounted) {
+        final dataProvider = context.read<ShamorZachorDataProvider>();
+        dataProvider.ensureLoaded();
+        _notifyTitleChange();
+      }
     });
   }
 
