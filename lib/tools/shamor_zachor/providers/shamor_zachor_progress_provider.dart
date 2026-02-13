@@ -101,8 +101,17 @@ class ShamorZachorProgressProvider with ChangeNotifier {
     ProgressService? progressService,
     dynamic dataProvider,
   })  : _progressService = progressService ?? ProgressService(),
-        _dataProvider = dataProvider {
-    _loadInitialProgress();
+        _dataProvider = dataProvider;
+
+  /// Ensures data is loaded - call this when the widget is first displayed
+  ///
+  /// This method is idempotent - it will only load data once.
+  /// IMPORTANT: This must be called AFTER dataProvider.ensureLoaded()
+  Future<void> ensureLoaded() async {
+    if (_isLoading || hasData || _error != null) {
+      return;
+    }
+    await _loadInitialProgress();
   }
 
   /// Load initial progress data
