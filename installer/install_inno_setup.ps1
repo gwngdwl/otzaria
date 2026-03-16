@@ -2,7 +2,7 @@
 
 # 1. Define Inno Setup download URL and installer details
 # The official site for Inno Setup is jrsoftware.org
-$innoSetupUrl = "https://files.jrsoftware.org/is/6/innosetup-6.2.2.exe" # Link to a specific stable version
+$innoSetupUrl = "https://files.jrsoftware.org/is/6/innosetup-6.3.3.exe" # Link to a specific stable version
 $installerFile = "$env:TEMP\innosetup_installer.exe"
 
 # 2. Download the Inno Setup installer
