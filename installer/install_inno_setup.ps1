@@ -1,9 +1,9 @@
 # PowerShell Script to Install Inno Setup
 
-# Install via winget (always gets the latest stable version)
+# Install via chocolatey (reliable in CI environments)
 Write-Host "Downloading Inno Setup..."
 try {
-    winget install -e --id JRSoftware.InnoSetup --silent --accept-package-agreements --accept-source-agreements
+    choco install innosetup -y --no-progress
     Write-Host "Inno Setup installed successfully."
 }
 catch {
@@ -11,28 +11,23 @@ catch {
     exit
 }
 
-# 4. Add Inno Setup to the System PATH
-Write-Host "Adding Inno Setup to the system PATH..."
-try {
-    # Default installation path for Inno Setup
-    $innoSetupPath = "C:\Program Files (x86)\Inno Setup 6"
-
-    if (Test-Path $innoSetupPath) {
+# Add Inno Setup to the system PATH (best-effort, not critical)
+$innoSetupPath = "C:\Program Files (x86)\Inno Setup 6"
+if (Test-Path $innoSetupPath) {
+    try {
         $currentPath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
         if (-not ($currentPath -like "*$innoSetupPath*")) {
             $newPath = "$currentPath;$innoSetupPath"
             [System.Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
-            # Note: A system-wide PATH change requires a restart of the terminal/session to take effect.
-            Write-Host "Inno Setup added to the system PATH. Please restart your terminal for the changes to take effect."
+            Write-Host "Inno Setup added to the system PATH."
         } else {
             Write-Host "Inno Setup is already in the system PATH."
         }
-    } else {
-        Write-Warning "Could not find Inno Setup installation directory at '$innoSetupPath'. PATH not updated."
+    } catch {
+        Write-Warning "Could not update system PATH (no admin rights). The workflow will locate ISCC.exe directly."
     }
-}
-catch {
-    Write-Error "Failed to add Inno Setup to the PATH."
+} else {
+    Write-Warning "Inno Setup directory not found at '$innoSetupPath', skipping PATH update."
 }
 
 Write-Host "Script execution finished."
