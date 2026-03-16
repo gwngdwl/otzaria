@@ -11,6 +11,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/zip_extractor_service.dart';
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
+import 'package:zstandard/zstandard.dart';
 
 class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   EmptyLibraryBloc({
@@ -379,21 +380,16 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     String archivePath,
     String outputPath,
   ) async {
+    final compressedBytes = await File(archivePath).readAsBytes();
+    final decompressed = await Zstandard().decompress(compressedBytes);
+    if (decompressed == null) {
+      throw Exception('חילוץ קובץ ZST נכשל: $archivePath');
+    }
     final outputFile = File(outputPath);
     if (await outputFile.exists()) {
       await outputFile.delete();
     }
-
-    final result = await Process.run(
-      'zstd',
-      ['-d', '-f', '-T0', '--long=31', archivePath, '-o', outputPath],
-    );
-
-    if (result.exitCode != 0) {
-      final stderr = (result.stderr as String?)?.trim();
-      final stdout = (result.stdout as String?)?.trim();
-      throw Exception(stderr?.isNotEmpty == true ? stderr : stdout);
-    }
+    await outputFile.writeAsBytes(decompressed, flush: true);
   }
 }
 
