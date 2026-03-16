@@ -13,7 +13,6 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/utils/toc_parser.dart';
-import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/external_catalog/repository/external_catalog_repository.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:path/path.dart' as path;
@@ -47,7 +46,8 @@ class FileSystemData {
     _initializeProviders();
   }
 
-  Future<Map<String, String>> get titleToPath => _titleToPath ??= _getTitleToPath();
+  Future<Map<String, String>> get titleToPath =>
+      _titleToPath ??= _getTitleToPath();
 
   /// Singleton instance of [FileSystemData]
   static FileSystemData instance = FileSystemData();
@@ -206,7 +206,7 @@ class FileSystemData {
     // קבלת שם התיקייה מההגדרות
     final folderName =
         Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
-            DatabaseConstants.otzariaFolderName;
+            '';
 
     // בדיקה שתיקיית הספרים קיימת
     final otzariaPath =

@@ -25,8 +25,8 @@ class DatabaseConstants {
   /// Gets the full database path based on the library path setting
   static String getDatabasePath() {
     final libraryPath = Settings.getValue<String>('key-library-path') ?? '.';
-    final folderName = Settings.getValue<String>('key-library-folder-name') ??
-        otzariaFolderName;
+    final folderName =
+        Settings.getValue<String>('key-library-folder-name') ?? '';
     return _buildDbPath(libraryPath, folderName);
   }
 
@@ -60,7 +60,7 @@ class DatabaseConstants {
         libraryPath ?? Settings.getValue<String>('key-library-path') ?? '.';
     final folder = folderName ??
         Settings.getValue<String>('key-library-folder-name') ??
-        otzariaFolderName;
+        '';
     final databaseDirectory = path.dirname(_buildDbPath(basePath, folder));
     return path.join(databaseDirectory, talmudBavliFolderName);
   }
@@ -135,7 +135,7 @@ class DatabaseConstants {
     // Fallback for directory paths (legacy support)
     final folder = folderName ??
         Settings.getValue<String>('key-library-folder-name') ??
-        otzariaFolderName;
+        '';
     return _buildDbPath(filePath, folder);
   }
 

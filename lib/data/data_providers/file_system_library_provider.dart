@@ -138,7 +138,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
   Future<Directory?> _resolveBundledTalmudBavliDirectory() async {
     final folderName =
         Settings.getValue<String>(SettingsRepository.keyLibraryFolderName) ??
-            DatabaseConstants.otzariaFolderName;
+            '';
 
     for (final candidatePath in DatabaseConstants.getTalmudBavliDirectoryPaths(
       _libraryPath,
