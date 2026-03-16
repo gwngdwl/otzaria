@@ -209,7 +209,8 @@ class FileSystemData {
             DatabaseConstants.otzariaFolderName;
 
     // בדיקה שתיקיית הספרים קיימת
-    final otzariaPath = path.join(libraryPath, folderName);
+    final otzariaPath =
+        folderName.isEmpty ? libraryPath : path.join(libraryPath, folderName);
     final otzariaDir = Directory(otzariaPath);
     if (!otzariaDir.existsSync()) {
       debugPrint('Books directory does not exist: $otzariaPath');

@@ -198,6 +198,8 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
 
       await Settings.setValue<String>(
           SettingsRepository.keyLibraryPath, event.path);
+      await Settings.setValue<String>(
+          SettingsRepository.keyLibraryFolderName, '');
       FileSystemData.instance.libraryPath = event.path;
       DataRepository.instance.library = FileSystemData.instance.getLibrary();
       DataRepository.instance.invalidateExternalBooksCache();

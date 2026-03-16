@@ -101,8 +101,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       }
 
       await Settings.setValue(SettingsRepository.keyLibraryPath, directoryPath);
-      await Settings.setValue(SettingsRepository.keyLibraryFolderName,
-          path.basename(directoryPath));
+      await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
 
       emit(EmptyLibraryDirectorySelected(selectedPath: directoryPath));
     } catch (e) {
@@ -223,8 +222,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       final rootPath = path.dirname(dbPath);
 
       await Settings.setValue(SettingsRepository.keyLibraryPath, rootPath);
-      await Settings.setValue(
-          SettingsRepository.keyLibraryFolderName, path.basename(rootPath));
+      await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
 
       emit(EmptyLibraryDirectorySelected(selectedPath: rootPath));
     } catch (e) {
