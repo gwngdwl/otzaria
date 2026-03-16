@@ -32,11 +32,6 @@ class AppPaths {
 
   /// Default library path based on install mode and platform.
   static Future<String> getDefaultLibraryPath() async {
-    // Handling legacy Windows installation
-    if (Platform.isWindows && await Directory(r'C:\אוצריא').exists()) {
-      return r'C:\אוצריא';
-    }
-
     final mode = await detectInstallMode();
     if (mode == InstallMode.systemWide) {
       if (Platform.isWindows) {
