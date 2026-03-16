@@ -84,3 +84,8 @@ if (Test-Path $changelogFile) {
 
 Write-Host "Version update completed successfully!"
 Write-Host "All files have been updated to version: $newVersion"
+
+# Git commit
+git add ".gitignore" "pubspec.yaml" "installer/otzaria_full.iss" "installer/otzaria.iss" $changelogFile $VersionFile
+git commit -m "$newVersion"
+Write-Host "Git commit created for version: $newVersion"
