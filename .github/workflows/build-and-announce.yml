@@ -47,7 +47,6 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
           cache: true
 
       - name: Create Google Calendar Credentials
@@ -403,7 +402,6 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
           cache: true
 
       - name: Create Google Calendar Credentials
@@ -707,7 +705,6 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
           cache: true
 
       - name: Install Rust (stable)
@@ -958,7 +955,6 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.41.9
           cache: true
 
       - name: Create Google Calendar Credentials
