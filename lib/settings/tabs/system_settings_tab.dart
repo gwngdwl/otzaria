@@ -40,7 +40,6 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
-import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1317,7 +1316,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       if (!mounted) return;
       RestartWidget.restartApp(
         context,
-        afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+        afterRestart: null,
       );
     } catch (e) {
       if (!mounted) return;
@@ -1715,7 +1714,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 if (!mounted) return;
                 RestartWidget.restartApp(
                   this.context,
-                  afterRestart: WebViewEnvironmentHolder.disposeForAppRestart,
+                  afterRestart: null,
                 );
               }
             },

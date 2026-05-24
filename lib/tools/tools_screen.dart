@@ -18,15 +18,6 @@ import 'package:otzaria/tools/calendar/calendar_screen.dart';
 import 'package:otzaria/widgets/navigation/keyboard_navigator.dart';
 import 'package:otzaria/widgets/misc/rtl_icon.dart';
 import 'package:otzaria/widgets/navigation/sidebar_nav_item.dart';
-import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
-import 'package:otzaria/plugins/bloc/plugin_system_state.dart';
-import 'package:otzaria/plugins/view/plugin_side_panel.dart';
-import 'package:otzaria/plugins/view/plugin_tab_page.dart';
-import 'package:otzaria/widgets/layout/context_overlay_panel.dart';
-import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
-import 'package:otzaria/plugins/models/installed_plugin.dart';
-import 'package:otzaria/settings/engine/settings_bloc.dart';
-import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/settings/settings_card.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
 
@@ -132,65 +123,6 @@ class BuiltInToolDescriptor extends ToolDescriptor {
   }
 }
 
-class PluginToolDescriptor extends ToolDescriptor {
-  final InstalledPlugin plugin;
-  PluginToolDescriptor({required this.plugin})
-      : super(
-            toolId: plugin.pluginId,
-            label: plugin.manifest.toolTabTitle,
-            order: plugin.manifest.toolTabOrder);
-
-  @override
-  Widget buildTab(BuildContext context) {
-    final iconData = fluentIconFromName(plugin.manifest.toolTabIconName);
-    return SizedBox(
-      width: 100,
-      child: Tab(
-        text: label,
-        icon: iconData != null ? Icon(iconData, size: 20) : null,
-      ),
-    );
-  }
-
-  @override
-  Widget buildPage(BuildContext context) => PluginTabPage(
-        key: ValueKey(plugin.pluginId),
-        plugin: plugin,
-      );
-
-  IconData get _pluginIcon =>
-      fluentIconFromName(plugin.manifest.toolTabIconName) ??
-      FluentIcons.puzzle_piece_24_regular;
-
-  @override
-  TopNavItem buildTopNavItem(
-      {required bool isSelected, required VoidCallback onTap, Key? key}) {
-    final icon = _pluginIcon;
-    return TopNavItem(
-      key: key,
-      icon: icon,
-      iconFilled: icon,
-      label: label,
-      isSelected: isSelected,
-      onTap: onTap,
-    );
-  }
-
-  @override
-  SidebarNavItem buildSidebarNavItem(
-      {required bool isSelected, required VoidCallback onTap, Key? key}) {
-    final icon = _pluginIcon;
-    return SidebarNavItem(
-      key: key,
-      icon: icon,
-      iconFilled: icon,
-      label: label,
-      isSelected: isSelected,
-      onTap: onTap,
-    );
-  }
-}
-
 class ToolsScreen extends StatefulWidget {
   const ToolsScreen({super.key});
 
@@ -212,10 +144,7 @@ class ToolsScreenState extends State<ToolsScreen>
   List<ToolDescriptor> _descriptors = [];
   List<Widget> _pages = [];
   String? _selectedToolId;
-  bool _isPanelOpen = false;
   bool _showMobileMenu = true;
-  InstalledPlugin? _transientPlugin;
-  bool _didInitFromBloc = false;
   // מונע rebuild מרובה של הטאבים כאשר הזהות המלאה של הלשוניות לא השתנתה
   String _lastDescriptorsSignature = '';
 
@@ -224,9 +153,6 @@ class ToolsScreenState extends State<ToolsScreen>
   bool _canTabScrollLeft = false;
   bool _canTabScrollRight = false;
 
-  // בקשת פתיחה ממתינה לכלי שעדיין אין לו descriptor (בעיקר תוספים שטרם
-  // נטענו מ-PluginSystemBloc). תיפתח באוטומט ב-_applyTabState הבא, או
-  // תיכשל עם UiSnack לאחר timeout.
   String? _pendingToolIdToOpen;
   Timer? _pendingToolTimeoutTimer;
   static const Duration _pendingToolTimeout = Duration(seconds: 5);
@@ -251,12 +177,7 @@ class ToolsScreenState extends State<ToolsScreen>
   // ─── Focus management ────────────────────────────────────────────────────────
 
   String _descriptorSignature(List<ToolDescriptor> descriptors) {
-    return descriptors.map((d) {
-      if (d is PluginToolDescriptor) {
-        return '${d.toolId}|${d.label}|${d.order}|${d.plugin.pinned}|${d.plugin.manifest.toolTabIconName}|${d.plugin.updatedAt.millisecondsSinceEpoch}';
-      }
-      return '${d.toolId}|${d.label}|${d.order}';
-    }).join('::');
+    return descriptors.map((d) => '${d.toolId}|${d.label}|${d.order}').join('::');
   }
 
   void _requestCalendarFocus(
@@ -413,46 +334,8 @@ class ToolsScreenState extends State<ToolsScreen>
     requestActiveTabFocus();
   }
 
-  void openPluginTransiently(InstalledPlugin plugin) {
-    final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
-    if (isOfflineMode && plugin.requiresNetwork) {
-      UiSnack.showError(
-          'התוסף "${plugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
-      return;
-    }
-    if (plugin.pinned) {
-      // לתוסף שמוצמד-ללשוניות יש (או יהיה) descriptor רגיל. מנתבים דרך
-      // requestOpenTool כדי לקבל את מנגנון ה-pending/timeout במקרה שה-bloc
-      // עדיין לא טען את הרשימה ברגע הלחיצה.
-      requestOpenTool(plugin.pluginId);
-      return;
-    }
-    // לתוסף שלא מוצמד ללשוניות — מצב transient (מחושב כאן ולא מחכה ל-bloc)
-    _transientPlugin = plugin;
-    _setSelectedToolId(plugin.pluginId);
-    final blocState = context.read<PluginSystemBloc>().state;
-    if (blocState is PluginSystemLoaded) {
-      _rebuildTabs(
-        blocState.pinnedPlugins.filterForOfflineMode(isOfflineMode),
-        transient: _transientPlugin,
-      );
-    }
-  }
-
-  void _applyTabState(
-    List<InstalledPlugin> pinnedPlugins, {
-    InstalledPlugin? transient,
-    required bool notify,
-  }) {
-    final newDescriptors = <ToolDescriptor>[
-      ..._buildBaseDescriptors(),
-      ...pinnedPlugins.map((p) => PluginToolDescriptor(plugin: p)),
-    ];
-    if (transient != null) {
-      if (!pinnedPlugins.any((p) => p.pluginId == transient.pluginId)) {
-        newDescriptors.add(PluginToolDescriptor(plugin: transient));
-      }
-    }
+  void _applyTabState({required bool notify}) {
+    final newDescriptors = <ToolDescriptor>[..._buildBaseDescriptors()];
 
     newDescriptors.sort((a, b) => a.order.compareTo(b.order));
     final newSignature = _descriptorSignature(newDescriptors);
@@ -479,12 +362,6 @@ class ToolsScreenState extends State<ToolsScreen>
     }
 
     _flushPendingToolIfReady();
-  }
-
-  void _rebuildTabs(List<InstalledPlugin> pinnedPlugins,
-      {InstalledPlugin? transient}) {
-    if (!mounted) return;
-    _applyTabState(pinnedPlugins, transient: transient, notify: true);
   }
 
   // ─── Lifecycle ────────────────────────────────────────────────────────────────
@@ -523,25 +400,9 @@ class ToolsScreenState extends State<ToolsScreen>
   void initState() {
     super.initState();
     FocusRepository().registerMoreScreenFocusRequester(requestActiveTabFocus);
-    _applyTabState([], notify: false);
+    _applyTabState(notify: false);
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _updateTabScrollState());
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_didInitFromBloc) {
-      _didInitFromBloc = true;
-      final state = context.read<PluginSystemBloc>().state;
-      if (state is PluginSystemLoaded) {
-        final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
-        _applyTabState(
-          state.pinnedPlugins.filterForOfflineMode(isOfflineMode),
-          notify: false,
-        );
-      }
-    }
   }
 
   void resetToCalendar() {
@@ -555,11 +416,7 @@ class ToolsScreenState extends State<ToolsScreen>
     _requestCalendarFocus();
   }
 
-  /// פותח לשונית כלי לפי מזהה. אם ה-descriptor עדיין לא נטען (תוסף שעוד לא
-  /// הגיע מ-PluginSystemBloc), הבקשה נכנסת לתור ותתבצע אוטומטית בעת הרענון
-  /// הבא של ה-descriptors. אם תוך 5 שניות עדיין לא נמצא — מוצגת שגיאה.
-  ///
-  /// משמש גם את ה-Guided Tour וגם את ה-deep links (`otzaria://open/tool/...`).
+  /// פותח לשונית כלי לפי מזהה.
   void requestOpenTool(String toolId) {
     final index = _descriptors.indexWhere((d) => d.toolId == toolId);
     if (index != -1) {
@@ -568,32 +425,6 @@ class ToolsScreenState extends State<ToolsScreen>
       return;
     }
 
-    // ה-descriptor לא נמצא בלשוניות הנוכחיות. בודקים אם מדובר בתוסף שכן מותקן
-    // אבל סונן מהתצוגה בגלל מצב מנותק — כדי להחזיר שגיאה תיאורית במקום
-    // "הכלי לא נמצא" המטעה.
-    final isOfflineMode = context.read<SettingsBloc>().state.isOfflineMode;
-    if (isOfflineMode) {
-      final blocState = context.read<PluginSystemBloc>().state;
-      if (blocState is PluginSystemLoaded) {
-        InstalledPlugin? hiddenPlugin;
-        for (final p in blocState.plugins) {
-          if (p.pluginId == toolId) {
-            hiddenPlugin = p;
-            break;
-          }
-        }
-        if (hiddenPlugin != null && hiddenPlugin.requiresNetwork) {
-          _clearPendingTool();
-          UiSnack.showError(
-              'התוסף "${hiddenPlugin.name}" דורש חיבור אינטרנט ולא ניתן לפתוח אותו במצב מנותק');
-          return;
-        }
-      }
-    }
-
-    // ה-descriptor עדיין לא קיים — קורה בעיקר עם תוספים לפני ש-PluginSystemLoaded
-    // הגיע. ממתינים ל-_applyTabState הבא כדי לפתוח, ומוסיפים timeout עם פידבק
-    // למקרה שהכלי לא מתקיים בפועל.
     _pendingToolIdToOpen = toolId;
     _pendingToolTimeoutTimer?.cancel();
     _pendingToolTimeoutTimer = Timer(_pendingToolTimeout, () {
@@ -664,13 +495,6 @@ class ToolsScreenState extends State<ToolsScreen>
       }
     }
 
-    final groupedIds = _mobileGroupDefs.expand((g) => g.toolIds).toSet();
-    final ungroupedPlugins =
-        _descriptors.where((d) => !groupedIds.contains(d.toolId)).toList();
-    if (ungroupedPlugins.isNotEmpty) {
-      groupedDescriptors.add((label: 'תוספים', tools: ungroupedPlugins));
-    }
-
     Widget buildIcon(ToolDescriptor descriptor) {
       if (descriptor is BuiltInToolDescriptor) {
         if (descriptor.imageIcon != null) {
@@ -679,10 +503,7 @@ class ToolsScreenState extends State<ToolsScreen>
         }
         return Icon(descriptor.icon, color: cs.primary);
       }
-      if (descriptor is PluginToolDescriptor) {
-        return Icon(descriptor._pluginIcon, color: cs.primary);
-      }
-      return Icon(FluentIcons.puzzle_piece_24_regular, color: cs.primary);
+      return Icon(FluentIcons.apps_24_regular, color: cs.primary);
     }
 
     return Scaffold(
@@ -692,25 +513,6 @@ class ToolsScreenState extends State<ToolsScreen>
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         title: const Text('כלים', textDirection: TextDirection.rtl),
-        actions: [
-          IconButton(
-            icon: const Icon(FluentIcons.puzzle_piece_24_regular),
-            tooltip: 'תוספים',
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => SizedBox(
-                height: MediaQuery.of(context).size.height * 0.6,
-                child: PluginSidePanel(
-                  onPluginSelected: (plugin) {
-                    Navigator.of(context).pop();
-                    openPluginTransiently(plugin);
-                  },
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(12),
@@ -907,14 +709,6 @@ class ToolsScreenState extends State<ToolsScreen>
                                 ),
                               ),
                             ),
-                            // כפתור תוספים מוצמד לשמאל חזותי (סוף Row ב-RTL)
-                            IconButton(
-                              icon: const Icon(
-                                  FluentIcons.puzzle_piece_24_regular),
-                              onPressed: () =>
-                                  setState(() => _isPanelOpen = !_isPanelOpen),
-                              tooltip: 'תוספים',
-                            ),
                           ],
                         ),
                       ),
@@ -940,16 +734,7 @@ class ToolsScreenState extends State<ToolsScreen>
                               ),
                             ),
                           ),
-                          ContextOverlayPanel(
-                            isOpen: _isPanelOpen,
-                            onClose: () => setState(() => _isPanelOpen = false),
-                            width: 300,
-                            child: PluginSidePanel(
-                              onPluginSelected: (plugin) {
-                                openPluginTransiently(plugin);
-                              },
-                            ),
-                          ),
+                          const SizedBox.shrink(),
                         ],
                       ),
                     ),
@@ -969,48 +754,7 @@ class ToolsScreenState extends State<ToolsScreen>
 
     final bgColor = AppSurfaces.panelBackground(context);
 
-    return MultiBlocListener(
-      listeners: [
-        BlocListener<SettingsBloc, SettingsState>(
-          listenWhen: (prev, curr) => prev.isOfflineMode != curr.isOfflineMode,
-          listener: (context, settingsState) {
-            final blocState = context.read<PluginSystemBloc>().state;
-            if (blocState is! PluginSystemLoaded) return;
-            // אם התוסף ה-transient דורש אינטרנט ועברנו למצב מנותק — נסגור אותו.
-            if (settingsState.isOfflineMode &&
-                _transientPlugin != null &&
-                _transientPlugin!.requiresNetwork) {
-              _transientPlugin = null;
-            }
-            _rebuildTabs(
-              blocState.pinnedPlugins
-                  .filterForOfflineMode(settingsState.isOfflineMode),
-              transient: _transientPlugin,
-            );
-          },
-        ),
-        BlocListener<PluginSystemBloc, PluginSystemState>(
-          listener: (context, state) {
-            if (state is PluginSystemLoaded) {
-              if (_transientPlugin != null) {
-                final updatedTransient = state.plugins.firstWhere(
-                    (p) => p.pluginId == _transientPlugin!.pluginId,
-                    orElse: () => _transientPlugin!);
-                _transientPlugin = updatedTransient;
-              }
-              final isOfflineMode =
-                  context.read<SettingsBloc>().state.isOfflineMode;
-              _rebuildTabs(
-                state.pinnedPlugins.filterForOfflineMode(isOfflineMode),
-                transient: _transientPlugin,
-              );
-            }
-            // טיפול ב-PluginSystemOverwriteRequired עבר ל-main_window_screen.dart
-            // כדי לעבוד גם כשפותחים קובץ ‎.otzplugin ממסך אחר.
-          },
-        ),
-      ],
-      child: Theme(
+    return Theme(
         data: Theme.of(context).copyWith(
           scaffoldBackgroundColor: bgColor,
           canvasColor: bgColor,
@@ -1031,7 +775,6 @@ class ToolsScreenState extends State<ToolsScreen>
             return content;
           },
         ),
-      ),
-    );
+      );
   }
 }

@@ -6,11 +6,9 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
-import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 
 /// מאפס מצב runtime מקומי כדי שהאפליקציה תוכל להיבנות מחדש בלי סגירת תהליך.
 Future<void> resetRuntimeStateForAppRestart() async {
-  await PluginRuntimeDispatcher.instance.prepareForAppRestart();
   await SqliteDataProvider.instance.dispose();
 
   final libraryPath = await AppPaths.getLibraryPath();

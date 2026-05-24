@@ -13,7 +13,6 @@ import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
 import 'package:otzaria/tools/calendar/helpers/zmanim_helpers.dart'
     as zmanim_helpers;
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/plugins/adapters/plugin_calendar_adapter.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 enum CalendarType { hebrew, gregorian, combined }
@@ -269,32 +268,6 @@ class CalendarState extends Equatable {
       ];
 }
 
-/// Interface לטעינת אירועי plugin — מאפשר החלפה ב-mock בטסטים.
-abstract class CalendarPluginSource {
-  Future<List<CustomEvent>> loadAndMergePluginEvents(
-    List<CustomEvent> existingEvents, {
-    String? currentWorkspaceId,
-    String? currentBookId,
-  });
-}
-
-/// מימוש ברירת מחדל שמעביר ל-PluginCalendarAdapter האמיתי.
-class _DefaultPluginSource implements CalendarPluginSource {
-  const _DefaultPluginSource();
-
-  @override
-  Future<List<CustomEvent>> loadAndMergePluginEvents(
-    List<CustomEvent> existingEvents, {
-    String? currentWorkspaceId,
-    String? currentBookId,
-  }) =>
-      PluginCalendarAdapter().loadAndMergePluginEvents(
-        existingEvents,
-        currentWorkspaceId: currentWorkspaceId,
-        currentBookId: currentBookId,
-      );
-}
-
 // Calendar Cubit
 class CalendarCubit extends Cubit<CalendarState> {
   static const String _primaryGoogleCalendarId = 'primary';
@@ -303,9 +276,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   final SettingsRepository _settingsRepository;
   final NotificationService _notificationService;
   final GoogleCalendarService _googleCalendarService;
-  final CalendarPluginSource _pluginCalendarAdapter;
   Timer? _todayRefreshTimer;
-  int _pluginRefreshGeneration = 0;
 
   // Getter for accessing notification service from outside
   NotificationService get notificationService => _notificationService;
@@ -314,13 +285,10 @@ class CalendarCubit extends Cubit<CalendarState> {
     SettingsRepository? settingsRepository,
     NotificationService? notificationService,
     GoogleCalendarService? googleCalendarService,
-    CalendarPluginSource? pluginCalendarAdapter,
   })  : _settingsRepository = settingsRepository ?? SettingsRepository(),
         _notificationService = notificationService ?? NotificationService(),
         _googleCalendarService =
             googleCalendarService ?? GoogleCalendarService(),
-        _pluginCalendarAdapter =
-            pluginCalendarAdapter ?? const _DefaultPluginSource(),
         super(CalendarState.initial()) {
     _initializeCalendar(resetSelectedToToday: true);
   }
@@ -389,11 +357,6 @@ class CalendarCubit extends Cubit<CalendarState> {
 
     if (isClosed) return;
 
-    // Add plugin published events via adapter
-    events = await _pluginCalendarAdapter.loadAndMergePluginEvents(events);
-
-    if (isClosed) return;
-
     emit(state.copyWith(
       calendarType: calendarType,
       dayTransition: dayTransition,
@@ -429,34 +392,6 @@ class CalendarCubit extends Cubit<CalendarState> {
       await syncGoogleCalendar(interactive: false);
     }
     _scheduleTodayRefresh();
-  }
-
-  /// מרענן אירועי plugin בזמן אמת.
-  ///
-  /// מסיר מה-state את כל האירועים שנוצרו על-ידי plugin
-  /// (id בפורמט `pluginId:key`) ומוסיף מחדש את כל ה-records
-  /// מה-DB לאחר upsert / remove.
-  ///
-  /// [currentWorkspaceId] / [currentBookId] — לסינון workspace/book scope.
-  Future<void> refreshPluginEvents({
-    String? currentWorkspaceId,
-    String? currentBookId,
-  }) async {
-    // בולע קריאות ישנות: רק הקריאה האחרונה שמסיימת מורשית ל-emit.
-    final generation = ++_pluginRefreshGeneration;
-
-    final pluginEvents = await _pluginCalendarAdapter.loadAndMergePluginEvents(
-      [],
-      currentWorkspaceId: currentWorkspaceId,
-      currentBookId: currentBookId,
-    );
-
-    if (isClosed || generation != _pluginRefreshGeneration) return;
-
-    // קריאת אירועי המשתמש מה-state הנוכחי (אחרי ה-await, כדי לא לדרוס אירועים
-    // שנטענו ב-_initializeCalendar בזמן שהמתנו לתשובת ה-DB)
-    final userEvents = state.events.where((e) => !e.id.contains(':')).toList();
-    emit(state.copyWith(events: [...userEvents, ...pluginEvents]));
   }
 
   static Map<String, ZmanAlertPreference> _parseZmanAlertPreferences(

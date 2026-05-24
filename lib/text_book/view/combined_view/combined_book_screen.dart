@@ -42,9 +42,6 @@ import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/utils/text/word_at_position.dart';
-import 'package:otzaria/plugins/services/context_menu_registry.dart';
-import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
-import 'package:otzaria/plugins/utils/fluent_icon_resolver.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
@@ -752,37 +749,6 @@ class _CombinedViewState extends State<CombinedView> {
         icon: FluentIcons.document_copy_24_regular,
         onTap: _copyVisibleText,
       ),
-      // פריטי תפריט מפלאגינים
-      ...() {
-        final pluginItems = ContextMenuRegistry.instance.getAll();
-        if (pluginItems.isEmpty) return const <AppContextMenuEntry>[];
-        return <AppContextMenuEntry>[
-          const AppContextMenuEntry.divider(),
-          ...pluginItems.map((record) {
-            final pluginId = record.$1;
-            final item = record.$2;
-            return AppContextMenuEntry(
-              label: item.label,
-              icon: fluentIconFromName(item.icon),
-              onTap: () {
-                unawaited(
-                    PluginRuntimeDispatcher.instance.dispatchEventToPlugin(
-                  pluginId,
-                  'reader.context_menu_item_clicked',
-                  {
-                    'itemId': item.id,
-                    'selectedText': selectedText ?? '',
-                    'currentRef': state.currentTitle ?? '',
-                    'currentBook': state.book.title,
-                    'currentBookId': state.book.title,
-                    'currentIndex': paragraphIndex,
-                  },
-                ));
-              },
-            );
-          }),
-        ];
-      }(),
     ];
   }
 
@@ -1140,20 +1106,6 @@ class _CombinedViewState extends State<CombinedView> {
                   _currentSelectedIndex.value = foundIndex;
                   widget.onSelectedTextChanged?.call(fixedPlain);
 
-                  // שליחת event לפלאגינים עם ה-index המדויק
-                  final selectionText = fixedPlain?.trim() ?? '';
-                  if (selectionText.isNotEmpty && loadedState != null) {
-                    unawaited(PluginRuntimeDispatcher.instance.dispatchEvent(
-                      'reader.selection_changed',
-                      {
-                        'text': selectionText,
-                        'currentRef': loadedState.currentTitle ?? '',
-                        'currentBook': loadedState.book.title,
-                        'currentBookId': loadedState.book.title,
-                        'currentIndex': foundIndex ?? 0,
-                      },
-                    ));
-                  }
                 }
                 _prefetchDictionaryLookups(fixedPlain);
               },

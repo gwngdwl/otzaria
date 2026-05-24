@@ -50,9 +50,6 @@ import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/file_sync/bloc/file_sync_bloc.dart';
 import 'package:otzaria/file_sync/repository/file_sync_repository.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
-import 'package:otzaria/plugins/bloc/plugin_system_bloc.dart';
-import 'package:otzaria/plugins/bloc/plugin_system_event.dart';
-import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
 
 import 'package:search_engine/search_engine.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -70,14 +67,11 @@ import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
-import 'package:otzaria/plugins/database/plugin_database_bootstrap.dart';
 import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
 import 'package:otzaria/core/splash_screen.dart';
-import 'package:otzaria/plugins/services/plugin_packager_cli.dart';
-import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 // Updated automatically by version update scripts - do not edit manually
@@ -245,13 +239,6 @@ bool _isIgnorableHardwareKeyboardAssertion(String errorString) {
 /// 4. Calls [initialize] to set up required services and configurations
 /// 5. Launches the main application widget
 void main(List<String> args) async {
-  // טיפול בפקודות CLI שאינן דורשות אתחול GUI (כגון אריזת תוסף).
-  // חייב לרוץ לפני SentryWidgetsFlutterBinding.ensureInitialized() כדי שלא
-  // ייפתח חלון Flutter ולא יתבצע אתחול מסד נתונים מיותר.
-  if (await _maybeRunCliCommand(args)) {
-    return;
-  }
-
   SentryWidgetsFlutterBinding.ensureInitialized();
   await _initializeDataRootForEarlyLogging();
   await _initializeLogMetadata();
@@ -513,24 +500,12 @@ Future<void> _initializeRestartableRuntime() async {
     _logNonFatalInitializationError('Pdfrx cache directory', error, stackTrace);
   }
 
-  await initPluginDatabaseSources();
-
   try {
     if (await BackupService.shouldPerformAutoBackup()) {
       await BackupService.performAutoBackup();
     }
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('Automatic backup', error, stackTrace);
-  }
-
-  try {
-    await PluginProtocolRegistrationService().ensureRegistered();
-  } catch (error, stackTrace) {
-    _logNonFatalInitializationError(
-      'Plugin protocol registration',
-      error,
-      stackTrace,
-    );
   }
 }
 
@@ -542,99 +517,23 @@ Future<void> _ensureBootstrapInitialized() {
 }
 
 Future<void> _enqueueExternalActivationArgs(List<String> args) async {
-  final activationUris = <String>[];
-
   for (final raw in args) {
     final arg = raw.trim();
     if (arg.isEmpty) continue;
 
     if (arg.toLowerCase().startsWith('otzaria:')) {
-      activationUris.add(arg);
-      continue;
-    }
-
-    // לחיצה כפולה על קובץ `.otzplugin` משויך — המערכת מעבירה את הנתיב כארגומנט.
-    // ב-Linux/macOS, ה-desktop entry משתמש ב-‎%u (URL), כך שהמערכת מעבירה
-    // ‎file:///abs/path. ממירים ל-נתיב מקומי לפני שמירה בתור.
-    final localPath = _resolveLocalPluginPath(arg);
-    if (localPath != null) {
-      activationUris.add(_buildLocalPluginInstallUri(localPath));
-    }
-  }
-
-  for (final uriString in activationUris) {
-    try {
-      await _externalActivationQueue.enqueueUriString(uriString);
-    } catch (error, stackTrace) {
-      _appendUnhandledErrorToLocalLog(
-        title: 'External Activation Queue Error',
-        error: error,
-        stackTrace: stackTrace,
-        details: {
-          'Uri': uriString,
-        },
-      );
-    }
-  }
-}
-
-/// מחזירה נתיב קובץ מקומי `.otzplugin` אם הארגומנט הוא כזה — או null אחרת.
-/// תומך גם ב-`file://` URIs (Linux/macOS) וגם בנתיב גולמי (Windows).
-@visibleForTesting
-String? resolveLocalPluginPathForTesting(String arg) =>
-    _resolveLocalPluginPath(arg);
-
-String? _resolveLocalPluginPath(String arg) {
-  String candidate = arg;
-  if (arg.toLowerCase().startsWith('file:')) {
-    try {
-      final uri = Uri.parse(arg);
-      if (uri.scheme == 'file') {
-        candidate = uri.toFilePath();
+      try {
+        await _externalActivationQueue.enqueueUriString(arg);
+      } catch (error, stackTrace) {
+        _appendUnhandledErrorToLocalLog(
+          title: 'External Activation Queue Error',
+          error: error,
+          stackTrace: stackTrace,
+          details: {'Uri': arg},
+        );
       }
-    } catch (_) {
-      // לא URI תקני — נמשיך עם הערך המקורי.
     }
   }
-
-  if (candidate.toLowerCase().endsWith('.otzplugin')) {
-    return candidate;
-  }
-  return null;
-}
-
-String _buildLocalPluginInstallUri(String filePath) {
-  final encoded = Uri.encodeQueryComponent(filePath);
-  return 'otzaria://plugin/install-local?path=$encoded';
-}
-
-/// מזהה ארגומנטים של ממשק שורת פקודה (CLI). אם זוהתה פקודה — מריצה
-/// אותה ומחזירה `true` (האפליקציה צריכה לעצור מיד ולא להעלות GUI).
-///
-/// פקודות נתמכות:
-///   `otzaria.exe pack-plugin [path] [--force] [--output <file>]`
-///       אורז תיקיית תוסף לקובץ `.otzplugin`. אם `path` חסר — נעשה
-///       שימוש בתיקייה הנוכחית.
-///   `otzaria.exe pack-plugin --help` / `-h` — הצגת מסך עזרה.
-///
-/// הלוגיקה עצמה ב-[PluginPackagerCli.run] כדי לשתף בדיוק את אותו הקוד
-/// עם `tool/plugins/package_plugin.dart`.
-Future<bool> _maybeRunCliCommand(List<String> args) async {
-  if (args.isEmpty) return false;
-
-  final command = args.first.trim().toLowerCase();
-  // תמיכה גם ב-`pack-plugin`, ב-`--pack-plugin` וב-`/pack-plugin` (Windows style).
-  final normalized =
-      command.replaceFirst(RegExp(r'^(--|/)'), '').replaceAll('_', '-');
-
-  if (normalized == 'pack-plugin') {
-    final exitCode = await PluginPackagerCli.run(args.skip(1).toList());
-    await stdout.flush();
-    await stderr.flush();
-    exit(exitCode);
-  }
-
-  return false;
 }
 
 class AppBootstrap extends StatefulWidget {
@@ -796,11 +695,6 @@ class _AppBootstrapState extends State<AppBootstrap> {
               ),
               workStatusCubit: context.read<WorkStatusCubit>(),
             ),
-          ),
-          BlocProvider<PluginSystemBloc>(
-            create: (_) => PluginSystemBloc(
-              repository: PluginRegistryRepository(),
-            )..add(LoadPlugins()),
           ),
         ],
         child: const App(),
