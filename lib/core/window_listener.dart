@@ -325,7 +325,7 @@ class AppWindowListener extends WindowListener {
       debugPrint('Window maximized');
     }
     if (WindowPersistence.isRestoring) return;
-    WindowPersistence.scheduleSave();
+    unawaited(WindowPersistence.saveMaximizedState(true));
     onWindowStateChanged?.call();
   }
 
@@ -335,6 +335,7 @@ class AppWindowListener extends WindowListener {
       debugPrint('Window unmaximized');
     }
     if (WindowPersistence.isRestoring) return;
+    unawaited(WindowPersistence.saveMaximizedState(false));
     WindowPersistence.scheduleSave();
     onWindowStateChanged?.call();
   }

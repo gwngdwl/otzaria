@@ -98,6 +98,14 @@ class WindowPersistence {
     }
   }
 
+  static Future<void> saveMaximizedState(bool isMaximized) async {
+    try {
+      await Settings.setValue(_kIsMaximized, isMaximized);
+    } catch (_) {
+      // Ignore persistence errors; should never crash the app.
+    }
+  }
+
   static Future<void> _saveNow() async {
     final isFullscreen = await windowManager.isFullScreen();
     final isMaximized = await windowManager.isMaximized();
