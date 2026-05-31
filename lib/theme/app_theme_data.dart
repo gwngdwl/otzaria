@@ -18,6 +18,30 @@ import 'package:otzaria/theme/app_tokens.dart';
 class AppThemeData {
   AppThemeData._();
 
+  static bool _isNeutralColor(Color color) {
+    final hslColor = HSLColor.fromColor(color);
+    return hslColor.saturation < 0.1;
+  }
+
+  /// יוצר ColorScheme עקבי לצבעי האפליקציה, כולל טיפול בצבעים ניטרליים.
+  static ColorScheme createColorScheme(
+    Color seedColor,
+    Brightness brightness,
+  ) {
+    if (_isNeutralColor(seedColor)) {
+      return ColorScheme.fromSeed(
+        seedColor: seedColor,
+        brightness: brightness,
+        dynamicSchemeVariant: DynamicSchemeVariant.monochrome,
+      );
+    }
+
+    return ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: brightness,
+    );
+  }
+
   static bool _isDesktopPlatform(TargetPlatform platform) {
     return switch (platform) {
       TargetPlatform.android || TargetPlatform.iOS => false,
