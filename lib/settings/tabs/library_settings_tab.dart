@@ -35,6 +35,7 @@ import 'package:otzaria/settings/dialogs/library_setup_dialog.dart';
 import 'package:otzaria/settings/services/orphan_library_service.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:path/path.dart' as p;
+import 'package:otzaria/utils/file/document_format.dart';
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatefulWidget {
@@ -74,14 +75,16 @@ class LibrarySettingsTab extends StatefulWidget {
         'עדכן',
       ],
     ),
-    SettingsSearchEntry(
-      id: 'library.location.hebrewbooks',
-      title: 'מיקום ספרי היברובוקס',
-      subtitle: 'תיקיית ספרי HebrewBooks',
-      tab: SettingsTab.library,
-      cardId: 'library.external',
-      keywords: ['hebrewbooks', 'היברובוקס'],
-    ),
+    // ספרי היברובוקס הם PDF בלבד, והאריח אינו נבנה בבנייה בלי PDF.
+    if (kPdfBooksEnabled)
+      SettingsSearchEntry(
+        id: 'library.location.hebrewbooks',
+        title: 'מיקום ספרי היברובוקס',
+        subtitle: 'תיקיית ספרי HebrewBooks',
+        tab: SettingsTab.library,
+        cardId: 'library.external',
+        keywords: ['hebrewbooks', 'היברובוקס'],
+      ),
     SettingsSearchEntry(
       id: 'library.custom_folders',
       title: 'תיקיות מותאמות אישית',
@@ -499,8 +502,10 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
             final libraryEmpty = context.select<NavigationBloc, bool>(
               (b) => b.state.isLibraryEmpty,
             );
-            // בניית כפתור בחירת תיקייה רק בדסקטופ והעברה לפאנל
-            final hebrewPathWidget = !(Platform.isAndroid || Platform.isIOS)
+            // בניית כפתור בחירת תיקייה רק בדסקטופ והעברה לפאנל.
+            // ספרי היברובוקס הם קובצי PDF בלבד, ולכן בבנייה בלי PDF אין אריח.
+            final hebrewPathWidget =
+                kPdfBooksEnabled && !(Platform.isAndroid || Platform.isIOS)
                 ? _buildHebrewBooksLocationWidget(context)
                 : null;
 

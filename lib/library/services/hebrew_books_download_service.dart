@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/utils/http_redirect_download.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 
 class HebrewBookDownload {
   final Uint8List bytes;
@@ -51,6 +52,11 @@ class HebrewBooksDownloadService {
     int bookId, {
     void Function(int received, int? total)? onProgress,
   }) async {
+    // ההורדה מביאה קובץ PDF מהרשת אל תוך הספרייה — המסלול הרחב מכולם.
+    if (!kPdfBooksEnabled) {
+      throw UnsupportedError(kPdfDisabledMessage);
+    }
+
     final response = await sendGetFollowingRedirects(
       _client,
       fileUrl(bookId),

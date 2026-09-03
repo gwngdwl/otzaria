@@ -13,6 +13,7 @@ import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/search/models/search_configuration.dart'
     show SearchMode;
 import 'package:otzaria/settings/view/settings_screen.dart' show SettingsTab;
+import 'package:otzaria/utils/file/document_format.dart';
 
 /// פעולה הנגזרת מקישור `otzaria://...` חיצוני.
 sealed class ExternalUriAction {
@@ -599,6 +600,8 @@ class ExternalUriRouter {
     }
 
     if (segments.length == 2 && firstLower == 'pdf') {
+      if (!kPdfBooksEnabled) return null;
+
       final bookId = int.tryParse(segments[1].trim());
       if (bookId == null || bookId <= 0) {
         return null;

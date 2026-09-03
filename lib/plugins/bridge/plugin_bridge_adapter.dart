@@ -124,6 +124,7 @@ import 'package:otzaria/plugins/services/plugin_text_occurrence_service.dart';
 import 'package:otzaria/plugins/services/text_source_map_service.dart';
 import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 
 /// גופן הממשק שאוצריא מוסרת לתוספים: sans מובנה שנשאר חד ב-11-12px.
 /// גופן הקריאה (`fontFamily`) אינו תחליף לו — הוא מצויר ל-25px,
@@ -3271,6 +3272,10 @@ class PluginBridgeAdapter {
           return {'printed': printed};
         });
       case 'exportPdf':
+        // ייצוא כותב PDF לדיסק, ולכן הוא נחסם כמו כל מסלול PDF אחר של תוסף.
+        if (!kPdfBooksEnabled) {
+          throw Exception('error.permission_denied: $kPdfDisabledMessage');
+        }
         final capture =
             _dependencies.capturePluginPagePdf ?? _defaultCapturePagePdf;
         final saver =
@@ -3780,17 +3785,28 @@ class PluginBridgeAdapter {
   }
 
   /// `fs.pickUserFile` — פותח דיאלוג בחירת קובץ, רושם אותו כקובץ מאושר ומחזיר
-  /// token ו-URL ש-WebView התוסף מורשה לטעון (PDF ב-`<iframe>`/PDF.js, טקסט
-  /// כ-`fetch`). הבייטים אינם חוצים את גשר ה-JS. ביטול מחזיר `{cancelled: true}`.
+  /// token ו-URL ש-WebView התוסף מורשה לטעון. הבייטים אינם חוצים את גשר
+  /// ה-JS. ביטול מחזיר `{cancelled: true}`.
   Future<Map<String, dynamic>> _pickUserFile(Map<String, dynamic> args) async {
     final picker = _dependencies.pickFile ?? _defaultPickFile;
     final rawExt = args['extensions'];
-    final extensions = rawExt is List
+    final requested = rawExt is List
         ? rawExt
               .map((e) => e.toString().replaceAll('.', '').toLowerCase())
               .where((e) => e.isNotEmpty)
               .toList()
         : null;
+    // בבנייה בלי PDF הבורר לא מציע PDF כלל; האכיפה עצמה היא
+    // ב-[PluginFileServer.register], שגם בחירה בכל דרך אחרת נחסמת בו.
+    final extensions = requested
+        ?.where((e) => kPdfBooksEnabled || e != 'pdf')
+        .toList();
+    // רשימה שהתרוקנה מהסינון אינה "בלי סינון": בורר עם רשימה ריקה נפתח
+    // לכל סוגי הקבצים, כלומר הרחבה במקום צמצום. הדחייה מפורשת ולא
+    // `cancelled`, אחרת התוסף מבין "המשתמש ביטל" ומציע ניסיון חוזר לנצח.
+    if (requested != null && requested.isNotEmpty && extensions!.isEmpty) {
+      throw Exception('error.permission_denied: $kPdfDisabledMessage');
+    }
     // ברירת המחדל נשארת קריאה: תוסף ותיק שאינו מכיר את השדה מקבל בדיוק מה
     // שקיבל תמיד. בקשת כתיבה דורשת גם את הרשאת הכתיבה, בנוסף להרשאת הקריאה
     // שהגשר כבר אכף.

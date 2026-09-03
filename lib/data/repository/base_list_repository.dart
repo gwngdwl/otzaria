@@ -17,6 +17,10 @@ abstract class BaseListRepository<T> {
        );
 
   Future<List<T>> load() async => _repo.load();
+
+  /// ראו [HiveListRepository.loadRaw].
+  Future<List<dynamic>> loadRaw() async => _repo.loadRaw();
+
   Future<void> save(List<T> items) async => _repo.save(items);
   Future<void> clear() async => _repo.clear();
   Future<void> addItem(T item) async => _repo.addItem(item);

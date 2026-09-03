@@ -160,6 +160,21 @@ extension DocumentFormatProperties on DocumentFormat {
         };
 }
 
+/// האם קובצי PDF נתמכים בבנייה הזו. נצרב בזמן קומפילציה:
+/// `--dart-define=OTZARIA_ENABLE_PDF=false` מסיר את PDF מכל מסלולי הכניסה.
+///
+/// זו אינה הגדרה ואין לה מתג בממשק — בנייה שנבנתה בלי PDF אינה יכולה
+/// לפתוח קובץ PDF בשום מסלול, גם לא בשחזור טאבים, בקישור עומק או בתוסף.
+const bool kPdfBooksEnabled = bool.fromEnvironment(
+  'OTZARIA_ENABLE_PDF',
+  defaultValue: true,
+);
+
+/// ההודעה האחידה שכל שער PDF זורק. שער בשכבת המודלים והטאבים זורק
+/// [UnsupportedError] איתה; שער בשכבת התוספים עוטף אותה בקוד ה-RPC
+/// `error.permission_denied` שהגשר מחלץ.
+const String kPdfDisabledMessage = 'PDF files are disabled in this build';
+
 /// הפורמטים הפעילים ל-production. זהו **מקור האמת היחיד** לרשימות סיומות
 /// בסורק, ב-FilePicker, בסנכרון הקבצים ובייבוא ספרים אישיים.
 ///
@@ -168,7 +183,7 @@ extension DocumentFormatProperties on DocumentFormat {
 const Set<DocumentFormat> kProductionBookFormats = {
   DocumentFormat.txt,
   DocumentFormat.text,
-  DocumentFormat.pdf,
+  if (kPdfBooksEnabled) DocumentFormat.pdf,
   DocumentFormat.epub,
   DocumentFormat.md,
   DocumentFormat.markdown,
@@ -248,6 +263,20 @@ bool isSupportedBookFile(String path) {
   final format = documentFormatFromExtension(path);
   return format != null && format.isProductionSupported;
 }
+
+/// האם הקובץ הוא PDF שהבנייה הזו סורקת. לשימוש בסורק שבונה [PdfBook]
+/// ישירות — שם [isSupportedBookFile] רחב מדי ומכניס גם קובץ טקסט.
+bool isSupportedPdfFile(String path) =>
+    kPdfBooksEnabled && documentFormatFromExtension(path) == DocumentFormat.pdf;
+
+/// גודל הכותרת שנסרקת לחתימת ‎%PDF‎. הספק אינו מחייב את החתימה בהיסט 0,
+/// וקוראי PDF (pdfium בכללם) מקבלים אותה בכל מקום בכותרת — חיפוש בהיסט 0
+/// בלבד היה מחמיץ קובץ עם בתים מקדימים.
+const int kPdfHeaderScanBytes = 1024;
+
+/// האם [bytes] מכיל את חתימת ‎%PDF‎ בכותרת. ראו [kPdfHeaderScanBytes].
+bool hasPdfSignatureInHeader(Uint8List bytes) =>
+    _indexOfSignature(bytes, _pdfSignature, kPdfHeaderScanBytes) >= 0;
 
 final Map<String, DocumentFormat> _byExtension = {
   for (final format in DocumentFormat.values) format.extension: format,
@@ -392,6 +421,19 @@ bool _startsWith(Uint8List bytes, List<int> signature) {
     if (bytes[i] != signature[i]) return false;
   }
   return true;
+}
+
+/// ההיסט הראשון של [signature] ב-[bytes], עד [limit] בתים, או ‎-1‎.
+int _indexOfSignature(Uint8List bytes, List<int> signature, int limit) {
+  final end = (bytes.length < limit ? bytes.length : limit) - signature.length;
+  outer:
+  for (var i = 0; i <= end; i++) {
+    for (var j = 0; j < signature.length; j++) {
+      if (bytes[i + j] != signature[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
 }
 
 /// חיפוש מחרוזת ASCII ב-[window] הבייטים הראשונים וב-[window] האחרונים.

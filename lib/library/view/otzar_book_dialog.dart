@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
@@ -194,7 +195,7 @@ class OtzarBookDialog extends StatelessWidget {
             foregroundColor: Theme.of(context).colorScheme.onSecondary,
           ),
         ),
-        if (_isHebrewBook && book.id != null)
+        if (kPdfBooksEnabled && _isHebrewBook && book.id != null)
           _HebrewBookDownloadButton(bookId: book.id!),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),

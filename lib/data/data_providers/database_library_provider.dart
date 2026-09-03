@@ -1602,7 +1602,9 @@ class DatabaseLibraryProvider implements LibraryProvider {
 
     await for (final entity in bundledDir.list()) {
       if (entity is! File) continue;
-      if (!entity.path.toLowerCase().endsWith('.pdf')) continue;
+      // הלולאה בונה [PdfBook] בלבד, ולכן הסינון חייב להיות PDF ולא
+      // "כל פורמט נתמך" — אחרת קובץ טקסט בתיקייה הופך לספר PDF שבור.
+      if (!isSupportedPdfFile(entity.path)) continue;
 
       final title = getTitleFromPath(entity.path);
       if (existingPdfTitles.contains(title)) continue;
@@ -3238,6 +3240,16 @@ class DatabaseLibraryProvider implements LibraryProvider {
     // External catalog books (fileType='link') are no longer stored in seforim.db.
     // They are served from a separate database via ExternalCatalogRepository.
     if (normalizedFileType == 'link' || normalizedFileType == 'url') {
+      return null;
+    }
+
+    // שורה שנסרקה בבנייה קודמת עדיין במסד. בלי הסינון כאן ספר שפורמטו יצא
+    // מ-[kProductionBookFormats] (למשל PDF בבנייה בלי PDF) מוצג בעץ הספרייה
+    // ואינו נפתח. שער הפורמטים המשותף, ולא בדיקת סיומת ייעודית — כך גם כל
+    // פורמט שיוסר בעתיד נופל כאן. `fileType` שאינו מזוהה אינו נחסם: הוא
+    // ברירת המחדל של העמודה ולא הצהרה.
+    final declaredFormat = documentFormatFromFileType(normalizedFileType);
+    if (declaredFormat != null && !declaredFormat.isProductionSupported) {
       return null;
     }
 

@@ -116,8 +116,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
     await for (final entity in bundledDir.list()) {
       if (entity is! File) continue;
 
-      final lowerPath = entity.path.toLowerCase();
-      if (!lowerPath.endsWith('.pdf')) continue;
+      if (!isSupportedPdfFile(entity.path)) continue;
 
       final book = await _createBookFromFile(
         entity,
@@ -224,9 +223,15 @@ class FileSystemLibraryProvider implements LibraryProvider {
       finalTopics = '$topics, ${title.split(' על ')[1]}';
     }
 
-    if (path.endsWith('.pdf')) {
-      final categoryPathStr = categoryPath.join(', ');
-      final categoryId = categoryPathStr.hashCode;
+    final format = documentFormatFromExtension(path);
+    // שער הפורמטים קודם לכל דיספאץ' לפי סוג. כשהבדיקה ישבה בתוך ענף של
+    // סוג מסוים, פורמט שיצא מ-[kProductionBookFormats] עדיין נאסף דרכו.
+    if (format == null || !format.isProductionSupported) return null;
+
+    final categoryPathStr = categoryPath.join(', ');
+    final categoryId = categoryPathStr.hashCode;
+
+    if (format == DocumentFormat.pdf) {
       _categoryIdToPath[categoryId] = categoryPathStr;
 
       return PdfBook(
@@ -243,17 +248,12 @@ class FileSystemLibraryProvider implements LibraryProvider {
       );
     }
 
-    final format = documentFormatFromExtension(path);
-    if (format != null &&
-        format.isProductionSupported &&
-        format.isTextual &&
+    if (format.isTextual &&
         // ‎.xml‎ ו-‎.wbk‎ נאספים רק אם תוכנם אכן מסמך — אותו שער שבכל שאר
         // נקודות הכניסה. בלעדיו כל קובץ XML בתיקיית הספרים הופך ל"ספר"
         // שנכשל בפתיחה ובכל אינדוקס.
         (!format.needsContentSniffing ||
             await isSupportedBookFileByContent(file.path))) {
-      final categoryPathStr = categoryPath.join(', ');
-      final categoryId = categoryPathStr.hashCode;
       _categoryIdToPath[categoryId] = categoryPathStr;
 
       return buildBookForFileType(
@@ -391,8 +391,7 @@ class FileSystemLibraryProvider implements LibraryProvider {
     if (bundledTalmudDir != null) {
       await for (final entity in bundledTalmudDir.list()) {
         if (entity is! File) continue;
-        final lower = entity.path.toLowerCase();
-        if (!lower.endsWith('.pdf')) continue;
+        if (!isSupportedPdfFile(entity.path)) continue;
         addPath(
           entity.path,
           bundledTalmudDir.path,

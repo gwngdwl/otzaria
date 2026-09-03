@@ -5,6 +5,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/tabs/models/external_book_matches.dart';
 import 'package:otzaria/tabs/models/reading_tab_search_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -177,7 +178,13 @@ class PdfBookTab extends OpenedTab {
   /// Creates a new instance of [PdfBookTab] from a JSON map.
   ///
   /// The JSON map should have 'path' and 'pageNumber' keys.
+  /// בבנייה בלי PDF טאב שנשמר לדיסק אינו משוחזר. השער כאן ולא אצל הקוראים:
+  /// `OpenedTab.fromJson`, `decodeCombinedTab` ו-`PdfCommentatorsTab.fromJson`
+  /// כולם נכנסים דרך כאן, וכל אחד מהם מדלג על הפריט שנכשל לבדו.
   factory PdfBookTab.fromJson(Map<String, dynamic> json) {
+    if (!kPdfBooksEnabled) {
+      throw UnsupportedError(kPdfDisabledMessage);
+    }
     final bool shouldOpenLeftPane = resolveRestoredReadingLeftPaneState(json);
 
     final PdfBook restoredBook = json['book'] != null

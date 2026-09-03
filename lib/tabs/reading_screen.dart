@@ -44,6 +44,7 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 
 class ReadingScreen extends StatefulWidget {
   const ReadingScreen({super.key});
@@ -543,6 +544,9 @@ class _ReadingScreenState extends State<ReadingScreen>
     bool allowBackgroundWarming = true,
     int pdfPaneCount = 1,
   }) {
+    if (isPaneBlockedByDisabledPdf(tab)) {
+      return const _PdfDisabledPane();
+    }
     if (tab is PdfBookTab) {
       return PdfBookScreen(
         key: ValueKey(tab),
@@ -673,4 +677,39 @@ class _TabVisibilityBridgeState extends State<_TabVisibilityBridge> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// השער האחרון: כל טאב חייב לעבור כאן כדי להיראות, ולכן גם טאב PDF שנוצר
+/// ממסלול שאינו חוסם (תוצאת חיפוש, איתור מקורות, שכפול טאב) אינו מרונדר.
+///
+/// ברמת קובץ ולא כתנאי בתוך `_buildPaneContent`, כדי שהבדיקה תוכל לאמת את
+/// השער עצמו — בלי אימות ישיר נסיגה שמסירה אותו עוברת ירוק.
+bool isPaneBlockedByDisabledPdf(OpenedTab tab) =>
+    !kPdfBooksEnabled && (tab is PdfBookTab || tab is PdfCommentatorsTab);
+
+/// מוצג במקום קורא ה-PDF בבנייה שנבנתה בלי תמיכת PDF.
+class _PdfDisabledPane extends StatelessWidget {
+  const _PdfDisabledPane();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            FluentIcons.document_dismiss_24_regular,
+            size: 48,
+            color: colors.onSurfaceVariant,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'קובצי PDF אינם נתמכים בגרסה זו',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ],
+      ),
+    );
+  }
 }

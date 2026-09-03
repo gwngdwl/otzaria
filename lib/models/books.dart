@@ -2,6 +2,7 @@ import 'package:otzaria/data/data_providers/library_provider_manager.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/utils/file/document_format.dart';
+
 //import 'package:pdfrx/pdfrx.dart';
 
 /// Represents a book in the application.
@@ -81,6 +82,11 @@ abstract class Book {
       case 'TextBook':
         return TextBook.fromJson(json);
       case 'PdfBook':
+        // בנייה בלי PDF: ספר מסודרר שנשמר בעבר (סימנייה, היסטוריה, טאב,
+        // סביבת עבודה, גיבוי) נדחה כאן. כל קורא רשימה מדלג על הפריט לבדו.
+        if (!kPdfBooksEnabled) {
+          throw UnsupportedError(kPdfDisabledMessage);
+        }
         return PdfBook.fromJson(json);
       case 'DocxBook':
         return DocxBook.fromJson(json);

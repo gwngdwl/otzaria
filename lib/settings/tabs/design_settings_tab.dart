@@ -15,6 +15,7 @@ import 'package:otzaria/settings/view/settings_screen.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 
 enum _SidebarMode { pinned, openOnBook, closed }
 
@@ -97,34 +98,38 @@ class DesignSettingsTab extends StatelessWidget {
         'למעלה',
       ],
     ),
-    SettingsSearchEntry(
-      id: 'design.pdf.book_view',
-      title: 'תצוגת ספר בPDF',
-      subtitle: 'פתיחת ספרי PDF בתצוגת ספר או רגילה',
-      tab: SettingsTab.design,
-      cardId: 'design.pdf',
-      keywords: ['pdf', 'תצוגה', 'תצוגת ספר', 'רגילה', 'מופעל', 'לא מופעל'],
-    ),
-    SettingsSearchEntry(
-      id: 'design.pdf.talmud_bavli_format',
-      title: 'פורמט פתיחת תלמוד בבלי',
-      subtitle:
-          'פתיחת מסכתות הבבלי בטקסט או ב-PDF — '
-          'בספרייה, בתצוגה המקדימה ובכל מקום אחר',
-      tab: SettingsTab.design,
-      cardId: 'design.pdf',
-      keywords: [
-        'תלמוד',
-        'בבלי',
-        'גמרא',
-        'צורת הדף',
-        'pdf',
-        'טקסט',
-        'מסכת',
-        'ספרייה',
-        'תצוגה מקדימה',
-      ],
-    ),
+    // הכרטיס שמאחסן את שני הפריטים אינו נבנה בבנייה בלי PDF; בלי התנאי
+    // החיפוש בהגדרות מחזיר תוצאה שמנווטת לכרטיס שאינו קיים.
+    if (kPdfBooksEnabled) ...[
+      SettingsSearchEntry(
+        id: 'design.pdf.book_view',
+        title: 'תצוגת ספר בPDF',
+        subtitle: 'פתיחת ספרי PDF בתצוגת ספר או רגילה',
+        tab: SettingsTab.design,
+        cardId: 'design.pdf',
+        keywords: ['pdf', 'תצוגה', 'תצוגת ספר', 'רגילה', 'מופעל', 'לא מופעל'],
+      ),
+      SettingsSearchEntry(
+        id: 'design.pdf.talmud_bavli_format',
+        title: 'פורמט פתיחת תלמוד בבלי',
+        subtitle:
+            'פתיחת מסכתות הבבלי בטקסט או ב-PDF — '
+            'בספרייה, בתצוגה המקדימה ובכל מקום אחר',
+        tab: SettingsTab.design,
+        cardId: 'design.pdf',
+        keywords: [
+          'תלמוד',
+          'בבלי',
+          'גמרא',
+          'צורת הדף',
+          'pdf',
+          'טקסט',
+          'מסכת',
+          'ספרייה',
+          'תצוגה מקדימה',
+        ],
+      ),
+    ],
     SettingsSearchEntry(
       id: 'design.layout.sidebar_mode',
       title: 'חלונית ניווט בין כותרות',
@@ -366,65 +371,68 @@ class DesignSettingsTab extends StatelessWidget {
                   kSettingsCardSpacing,
                 ],
 
-                SettingsCard(
-                  cardId: 'design.pdf',
-                  title: context.settingsText('תצוגת PDF'),
-                  children: [
-                    SettingsActionTile.switchTile(
-                      icon: OtzariaIcons.otzaria_icon_2_page_24_regular,
-                      title: context.settingsText('תצוגת ספר בPDF'),
-                      subtitle: context.settingsText(
-                        state.enablePerBookSettings
-                            ? state.pdfBookViewByDefault
-                                  ? 'ספרי PDF ייפתחו בתצוגת ספר'
-                                  : 'ספרי PDF ייפתחו בתצוגה רגילה'
-                            : state.pdfBookViewByDefault
-                            ? 'כל ספרי ה-PDF ייפתחו בתצוגת ספר'
-                            : 'כל ספרי ה-PDF ייפתחו בתצוגה רגילה',
+                // שני האריחים שבכרטיס נוגעים אך ורק ל-PDF; בבנייה בלי PDF
+                // הם פקדים מתים ששומרים ערך שאינו משפיע על דבר.
+                if (kPdfBooksEnabled) ...[
+                  SettingsCard(
+                    cardId: 'design.pdf',
+                    title: context.settingsText('תצוגת PDF'),
+                    children: [
+                      SettingsActionTile.switchTile(
+                        icon: OtzariaIcons.otzaria_icon_2_page_24_regular,
+                        title: context.settingsText('תצוגת ספר בPDF'),
+                        subtitle: context.settingsText(
+                          state.enablePerBookSettings
+                              ? state.pdfBookViewByDefault
+                                    ? 'ספרי PDF ייפתחו בתצוגת ספר'
+                                    : 'ספרי PDF ייפתחו בתצוגה רגילה'
+                              : state.pdfBookViewByDefault
+                              ? 'כל ספרי ה-PDF ייפתחו בתצוגת ספר'
+                              : 'כל ספרי ה-PDF ייפתחו בתצוגה רגילה',
+                        ),
+                        value: state.pdfBookViewByDefault,
+                        onChanged: (value) {
+                          context.read<SettingsBloc>().add(
+                            UpdatePdfBookViewByDefault(value),
+                          );
+                        },
                       ),
-                      value: state.pdfBookViewByDefault,
-                      onChanged: (value) {
-                        context.read<SettingsBloc>().add(
-                          UpdatePdfBookViewByDefault(value),
-                        );
-                      },
-                    ),
-                    SettingsActionTile.segmentedTile<String>(
-                      icon: FluentIcons.book_number_24_regular,
-                      title: context.settingsText('פורמט פתיחת תלמוד בבלי'),
-                      options: [
-                        SegmentOption(
-                          value: 'text',
-                          label: context.settingsText('טקסט'),
-                          icon: OtzariaIcons.book_alef_24_regular,
-                          subtitle: context.settingsText(
-                            'מסכתות הבבלי ייפתחו במהדורת הטקסט '
-                            '(מהספרייה, מתוצאות חיפוש, מאיתור מקורות '
-                            'ומקישורים)',
+                      SettingsActionTile.segmentedTile<String>(
+                        icon: FluentIcons.book_number_24_regular,
+                        title: context.settingsText('פורמט פתיחת תלמוד בבלי'),
+                        options: [
+                          SegmentOption(
+                            value: 'text',
+                            label: context.settingsText('טקסט'),
+                            icon: OtzariaIcons.book_alef_24_regular,
+                            subtitle: context.settingsText(
+                              'מסכתות הבבלי ייפתחו במהדורת הטקסט '
+                              '(מהספרייה, מתוצאות חיפוש, מאיתור מקורות '
+                              'ומקישורים)',
+                            ),
                           ),
-                        ),
-                        SegmentOption(
-                          value: 'pdf',
-                          label: 'PDF',
-                          icon: OtzariaIcons.book_pdf_24_regular,
-                          subtitle: context.settingsText(
-                            'מסכתות הבבלי ייפתחו במהדורת ה-PDF '
-                            'בדף המתאים, גם בפתיחה מהספרייה '
-                            'ובתצוגה המקדימה',
+                          SegmentOption(
+                            value: 'pdf',
+                            label: 'PDF',
+                            icon: OtzariaIcons.book_pdf_24_regular,
+                            subtitle: context.settingsText(
+                              'מסכתות הבבלי ייפתחו במהדורת ה-PDF '
+                              'בדף המתאים, גם בפתיחה מהספרייה '
+                              'ובתצוגה המקדימה',
+                            ),
                           ),
-                        ),
-                      ],
-                      currentValue: state.talmudBavliOpenFormat,
-                      onChanged: (value) {
-                        context.read<SettingsBloc>().add(
-                          UpdateTalmudBavliOpenFormat(value),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-
-                kSettingsCardSpacing,
+                        ],
+                        currentValue: state.talmudBavliOpenFormat,
+                        onChanged: (value) {
+                          context.read<SettingsBloc>().add(
+                            UpdateTalmudBavliOpenFormat(value),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  kSettingsCardSpacing,
+                ],
 
                 // התנהגות סרגל צד
                 SettingsCard(

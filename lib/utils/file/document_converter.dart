@@ -300,6 +300,20 @@ void _assertNotBinaryContainer(Uint8List head, String? path) {
   );
 }
 
+/// האם תוכן הקובץ מכיל את חתימת ‎%PDF‎ בכותרתו, בלי להסתמך על הסיומת.
+///
+/// קורא את כותרת הקובץ בלבד. קובץ שאינו קיים או שאינו ניתן לקריאה מוחזר
+/// כ-`false` — ההחלטה מה לעשות עם זה שייכת לקורא.
+Future<bool> hasPdfContentSignature(String path) async {
+  try {
+    return hasPdfSignatureInHeader(
+      await _readFileHead(File(path), kPdfHeaderScanBytes),
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
 Future<Uint8List> _readFileHead(File file, int length) async {
   final handle = await file.open();
   try {

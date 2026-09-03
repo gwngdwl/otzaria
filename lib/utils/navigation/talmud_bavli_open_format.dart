@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
@@ -19,9 +20,13 @@ import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/file/page_converter.dart';
 
 /// האם הגדרת פורמט הפתיחה של תלמוד בבלי היא PDF (ברירת המחדל: טקסט).
+///
+/// בבנייה בלי PDF זו תמיד `false` — כך גם הגדרה שנשמרה מבנייה קודמת או
+/// שוחזרה מגיבוי אינה מפנה לפורמט שאינו קיים.
 bool talmudBavliOpensInPdf() =>
+    kPdfBooksEnabled &&
     Settings.getValue<String>(SettingsRepository.keyTalmudBavliOpenFormat) ==
-    'pdf';
+        'pdf';
 
 /// האם [book] הוא מסכת תלמוד בבלי (ולא מפרש או ספר עזר).
 ///
@@ -85,6 +90,7 @@ Future<({TextBook textBook, PdfBook pdfBook})?> resolveTalmudBavliPdfBook(
   TextBook textBook, {
   bool? forcePdf,
 }) async {
+  if (!kPdfBooksEnabled) return null;
   if (textBook.isUserBook) return null;
   if (!(forcePdf ?? talmudBavliOpensInPdf())) return null;
   try {

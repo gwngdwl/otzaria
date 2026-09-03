@@ -4,6 +4,8 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 
 /// רשומת קובץ אישי שהמשתמש אישר לתוסף, כפי שהיא מוחזקת בזיכרון השרת.
 class PluginFileGrant {
@@ -140,11 +142,30 @@ class PluginFileServer {
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
+  /// האם הקובץ חסום בבנייה הזו. לפי התוכן ולא רק לפי הסיומת:
+  /// `a.pdf`→`a.bin` היה עוקף בדיקת סיומת בלבד.
+  static Future<bool> _isBlockedPdf(String canonicalPath) async {
+    if (kPdfBooksEnabled) return false;
+    return p.extension(canonicalPath).toLowerCase() == '.pdf' ||
+        await hasPdfContentSignature(canonicalPath);
+  }
+
+  /// בנייה בלי PDF חוסמת כאן — תוסף עם pdf.js משלו לא יכול לקבל את הבייטים.
+  ///
+  /// הרישום אינו מספיק לבדו: ה-grant מחזיק נתיב, וההגשה קוראת אותו מהדיסק
+  /// מחדש. קובץ שהוחלף בתוכן PDF אחרי הרישום נבדק שוב ב-[_handleRequest].
+  static Future<void> _rejectIfPdfDisabled(String canonicalPath) async {
+    if (await _isBlockedPdf(canonicalPath)) {
+      throw Exception('error.permission_denied: $kPdfDisabledMessage');
+    }
+  }
+
   /// רושם קובץ מאושר חדש ומחזיר token טרי וה-URL לטעינה.
   Future<PluginFileRegistration> register({
     required String pluginId,
     required String canonicalPath,
   }) async {
+    await _rejectIfPdfDisabled(canonicalPath);
     await _ensureStarted();
     final token = _generateToken();
     _grants[token] = PluginFileGrant(
@@ -161,6 +182,7 @@ class PluginFileServer {
     required String canonicalPath,
     required String token,
   }) async {
+    await _rejectIfPdfDisabled(canonicalPath);
     await _ensureStarted();
     _grants[token] = PluginFileGrant(
       pluginId: pluginId,
@@ -509,6 +531,10 @@ class PluginFileServer {
       final file = File(grant.canonicalPath);
       if (!await file.exists()) {
         response.statusCode = HttpStatus.notFound;
+        return;
+      }
+      if (await _isBlockedPdf(grant.canonicalPath)) {
+        response.statusCode = HttpStatus.forbidden;
         return;
       }
 

@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:otzaria/core/http_client_registry.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:otzaria/utils/file/document_converter.dart';
+import 'package:otzaria/utils/file/document_format.dart';
 
 /// תוצאת הורדת קובץ.
 class PluginFileDownloadResult {
@@ -55,6 +57,36 @@ class PluginFileDownloadService {
     _client.close();
   }
 
+  /// בבנייה בלי PDF תוסף אינו מוריד PDF לדיסק. ההגשה ל-WebView חסומה כבר
+  /// ב-[PluginFileServer], וזה חוסם גם את הבאת הקובץ מהרשת מלכתחילה.
+  ///
+  /// אותו קידוד `error.<code>:` כמו ב-[PluginFileServer] — הגשר מחלץ ממנו
+  /// את הקוד שהתוסף מקבל; חריגה ללא הקידומת מגיעה כ-`error.internal`.
+  static void _rejectIfPdfDisabled(String fileName) {
+    if (kPdfBooksEnabled) return;
+    if (p.extension(fileName).toLowerCase() == '.pdf') {
+      throw Exception('error.permission_denied: $kPdfDisabledMessage');
+    }
+  }
+
+  /// האם מה שירד עד כה הוא PDF חסום. הבדיקה על שם היעד היא ניחוש; קובץ
+  /// שנשמר בסיומת אחרת מזוהה רק לפי תוכנו.
+  static Future<bool> _isBlockedPdf(File outFile) async =>
+      !kPdfBooksEnabled && await hasPdfContentSignature(outFile.path);
+
+  /// דחייה לפי תוכן הקובץ שירד, כולל מחיקתו כדי שלא יישאר PDF על הדיסק.
+  static Future<void> _rejectDownloadedPdf(File outFile) async {
+    if (!await _isBlockedPdf(outFile)) return;
+    await _deleteQuietly(outFile);
+    throw Exception('error.permission_denied: $kPdfDisabledMessage');
+  }
+
+  static Future<void> _deleteQuietly(File file) async {
+    try {
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+  }
+
   /// מורידה את הקובץ מ-[downloadUri] אל תיקיית ההורדות.
   ///
   /// [isAllowed] נבדק על ה-URL ההתחלתי וגם על כל יעד redirect (מול הרשימה
@@ -75,6 +107,15 @@ class PluginFileDownloadService {
     String? filename,
     Directory? targetDir,
   }) async {
+    final baseName = _sanitizeFilename(
+      (filename == null || filename.trim().isEmpty)
+          ? _filenameFromUri(downloadUri)
+          : filename,
+    );
+    // לפני הבקשה: דחייה אחרי ה-fetch הייתה משאירה גוף תגובה פתוח שאיש
+    // אינו מנקז, ומחזיקה את החיבור עד ל-timeout.
+    _rejectIfPdfDisabled(baseName);
+
     final response = await _fetchFollowingAllowedRedirects(
       downloadUri,
       isAllowed,
@@ -84,11 +125,6 @@ class PluginFileDownloadService {
     final dir = targetDir ?? await _resolveDownloadsDir();
     await dir.create(recursive: true);
 
-    final baseName = _sanitizeFilename(
-      (filename == null || filename.trim().isEmpty)
-          ? _filenameFromUri(downloadUri)
-          : filename,
-    );
     final outFile = _resolveNonColliding(dir, baseName);
 
     final sink = outFile.openWrite();
@@ -106,6 +142,7 @@ class PluginFileDownloadService {
       rethrow;
     }
 
+    await _rejectDownloadedPdf(outFile);
     return PluginFileDownloadResult(outFile.path, p.basename(outFile.path));
   }
 
@@ -133,6 +170,8 @@ class PluginFileDownloadService {
     bool Function(Uri previous, Uri target)? isRedirectAllowed,
     bool resume = false,
   }) async {
+    _rejectIfPdfDisabled(destPath);
+
     final outFile = File(destPath);
     await outFile.parent.create(recursive: true);
     final resumeFile = File('$destPath.resume');
@@ -165,6 +204,7 @@ class PluginFileDownloadService {
       final total = _unsatisfiedRangeTotal(contentRange);
       if (hasResumeState && total == existingBytes) {
         await _deleteResumeState(resumeFile);
+        await _rejectDownloadedPdf(outFile);
         return PluginFileDownloadResult(outFile.path, p.basename(outFile.path));
       }
       if (await outFile.exists()) await outFile.delete();
@@ -244,13 +284,16 @@ class PluginFileDownloadService {
       final receivedBytes = partialBytes == null
           ? null
           : partialBytes - bytesBeforeResponse;
+      // חלקי שנשמר להמשכה חייב לעבור את אותו שער כמו קובץ שהושלם: בלעדיו
+      // ראש PDF נשאר על הדיסק אחרי קטיעה מכוונת של הזרם.
       final safePartial =
           hasResumeState &&
           partialBytes != null &&
           receivedBytes != null &&
           receivedBytes >= 0 &&
           (expectedBodyBytes == null || receivedBytes <= expectedBodyBytes) &&
-          (expectedTotal == null || partialBytes <= expectedTotal);
+          (expectedTotal == null || partialBytes <= expectedTotal) &&
+          !await _isBlockedPdf(outFile);
       if (!safePartial && await outFile.exists()) await outFile.delete();
       if (!await outFile.exists()) await _deleteResumeState(resumeFile);
       rethrow;
@@ -262,7 +305,8 @@ class PluginFileDownloadService {
       final resumableShortRead =
           hasResumeState &&
           receivedBytes >= 0 &&
-          receivedBytes < expectedBodyBytes;
+          receivedBytes < expectedBodyBytes &&
+          !await _isBlockedPdf(outFile);
       if (!resumableShortRead) {
         await outFile.delete();
         await _deleteResumeState(resumeFile);
@@ -274,7 +318,10 @@ class PluginFileDownloadService {
 
     if (expectedTotal != null) {
       if (finalBytes != expectedTotal) {
-        final resumableShortRead = hasResumeState && finalBytes < expectedTotal;
+        final resumableShortRead =
+            hasResumeState &&
+            finalBytes < expectedTotal &&
+            !await _isBlockedPdf(outFile);
         if (!resumableShortRead && await outFile.exists()) {
           await outFile.delete();
           await _deleteResumeState(resumeFile);
@@ -286,6 +333,7 @@ class PluginFileDownloadService {
     }
 
     await _deleteResumeState(resumeFile);
+    await _rejectDownloadedPdf(outFile);
     return PluginFileDownloadResult(outFile.path, p.basename(outFile.path));
   }
 

@@ -13,6 +13,9 @@
 מקור האמת הוא `kProductionBookFormats` ב-`lib/utils/file/document_format.dart`;
 הטבלה כאן נגזרת ממנו.
 
+`pdf` יוצא מהסט כשהבנייה נעשית עם `--dart-define=OTZARIA_ENABLE_PDF=false`
+(ראו [`pdf_free_build.md`](pdf_free_build.md)).
+
 | פורמט | מנוע ההמרה | קבוע הגרסה |
 |---|---|---|
 | `txt` | קריאה ישירה (זיהוי קידוד) | — |

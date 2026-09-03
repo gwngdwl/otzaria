@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -10,6 +10,7 @@ import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/bookmarks/repository/bookmark_repository.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
 import 'package:otzaria/data/data_providers/hive_data_provider.dart';
+import 'package:otzaria/utils/file/hive_utils.dart';
 import 'package:otzaria/history/history_repository.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
@@ -366,17 +367,26 @@ class BackupService {
       !isNonSettingKey(key) && !nonPortableSettingsKeys.contains(key);
 
   /// Backup bookmarks
+  ///
+  /// גולמי ולא מפוענח: פריט שהבנייה הזו אינה יודעת לטעון (ספר PDF בבנייה
+  /// בלי PDF) חייב להיכנס לגיבוי, אחרת המשתמש מאבד אותו בדיוק במקום
+  /// שאמור לשמר אותו.
   static Future<List<Map<String, dynamic>>> _backupBookmarks() async {
-    final repo = BookmarkRepository();
-    final bookmarks = await repo.loadBookmarks();
-    return bookmarks.map((b) => b.toJson()).toList();
+    return _rawEntries(await BookmarkRepository().loadRaw());
   }
 
-  /// Backup history
+  /// Backup history. גולמי מאותה סיבה כמו ב-[_backupBookmarks].
   static Future<List<Map<String, dynamic>>> _backupHistory() async {
-    final repo = HistoryRepository();
-    final history = await repo.loadHistory();
-    return history.map((h) => h.toJson()).toList();
+    return _rawEntries(await HistoryRepository().loadRaw());
+  }
+
+  /// ממיר שורות Hive גולמיות למפות JSON, ומדלג על שורה שאינה מפה.
+  static List<Map<String, dynamic>> _rawEntries(List<dynamic> raw) {
+    final entries = <Map<String, dynamic>>[];
+    for (final e in raw) {
+      if (e is Map) entries.add(castMap(e));
+    }
+    return entries;
   }
 
   /// Backup notes from SQLite database
@@ -983,15 +993,31 @@ class BackupService {
     }
   }
 
+  /// מפענח סימניות/היסטוריה מגיבוי, ומדלג על פריט שאינו נטען במחשב היעד
+  /// (ספר שפורמטו אינו נתמך בבנייה הזו). בלי הדילוג פריט אחד מפיל את כל
+  /// השחזור — כולל ההערות והטאבים שנשחזרים אחריו.
+  static List<Bookmark> _decodeBookmarks(
+    List<Map<String, dynamic>> data,
+    String label,
+  ) {
+    final decoded = <Bookmark>[];
+    for (final entry in data) {
+      try {
+        decoded.add(Bookmark.fromJson(entry));
+      } catch (e) {
+        debugPrint('⚠️ Skipping $label entry that failed to restore: $e');
+      }
+    }
+    return decoded;
+  }
+
   /// Restore bookmarks. [counts] לא ריק = ייבוא ממזג, והסימניות מתווספות.
   static Future<void> _restoreBookmarks(
     List<Map<String, dynamic>> bookmarksData, {
     BackupImportCounts? counts,
   }) async {
     final repo = BookmarkRepository();
-    final bookmarks = bookmarksData
-        .map((data) => Bookmark.fromJson(data))
-        .toList();
+    final bookmarks = _decodeBookmarks(bookmarksData, 'bookmark');
     if (counts == null) {
       await repo.saveBookmarks(bookmarks);
       return;
@@ -1010,7 +1036,7 @@ class BackupService {
     BackupImportCounts? counts,
   }) async {
     final repo = HistoryRepository();
-    final history = historyData.map((data) => Bookmark.fromJson(data)).toList();
+    final history = _decodeBookmarks(historyData, 'history');
     if (counts == null) {
       await repo.saveHistory(history);
       return;

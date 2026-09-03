@@ -271,3 +271,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           exit $second_exit
+
+      # חסימת ה-PDF נצרבת בקומפילציה, ולכן הריצה הרגילה לעולם אינה נוגעת בשערים
+      # עצמם — כל טענה שלהם מותנית ב-`kPdfBooksEnabled`. בלי הריצה הזו נסיגה
+      # שמסירה שער עוברת ירוק. רץ על shard אחד — הוא אינו מפוצל.
+      #
+      # `always()`: בלעדיו הצעד מדולג בדיוק כששאר הטסטים בשארד 0 נכשלו —
+      # כלומר ב-PR שסביר בו הכי הרבה שנשבר גם שער.
+      - name: Run PDF-free build gates
+        if: always() && matrix.shard == 0
+        run: |
+          flutter test --dart-define=OTZARIA_ENABLE_PDF=false test/utils/file/pdf_disabled_build_test.dart

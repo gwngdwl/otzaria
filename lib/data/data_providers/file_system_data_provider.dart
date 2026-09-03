@@ -356,6 +356,8 @@ class FileSystemData {
   static Future<Map<String, String>> scanHebrewBooksPdfFilesAtPath(
     String configuredPath,
   ) async {
+    if (!kPdfBooksEnabled) return const {};
+
     final configuredDir = Directory(configuredPath);
     final booksDir = Directory(path.join(configuredPath, 'Books'));
     final directories = [configuredDir, booksDir];
@@ -385,6 +387,8 @@ class FileSystemData {
   static Future<Map<String, String>> probeHebrewBooksPdfFilesByIds(
     Set<int> ids,
   ) async {
+    if (!kPdfBooksEnabled) return const {};
+
     final hebrewBooksPath = Settings.getValue<String>(
       SettingsRepository.keyHebrewBooksPath,
     );
